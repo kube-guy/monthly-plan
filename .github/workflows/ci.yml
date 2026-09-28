@@ -1,0 +1,52 @@
+name: Swift checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Core and persistence checks
+        run: swift run --disable-sandbox MonthlyPlanChecks
+      - name: Release build
+        run: swift build --disable-sandbox -c release --product monthly-plan
+      - name: Package macOS app
+        run: bash scripts/package-app.sh --skip-build
+      - name: Export PNG and JPG
+        run: |
+          mkdir -p build/previews
+          .build/release/monthly-plan --export-demo build/previews/calendar.png
+          .build/release/monthly-plan --export-demo build/previews/calendar.jpg
+          sips -g pixelWidth -g pixelHeight build/previews/calendar.png
+
+  database:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: monthly-plan-test-only
+          POSTGRES_DB: monthly_plan_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: monthly-plan-test-only
+      PGDATABASE: monthly_plan_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Supabase schema and account isolation
+        run: |
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/bootstrap.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/202609280001_initial.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/security.sql
