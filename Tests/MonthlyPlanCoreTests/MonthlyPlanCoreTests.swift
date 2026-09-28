@@ -226,6 +226,7 @@ private func XCTAssertNoThrow<T>(
       ("place mapping sync", suite.testExternalPlaceSyncAndUnlink),
       ("invalid remote response", suite.testInvalidRemoteDoesNotDamageLocal),
       ("Supabase configuration safety", suite.testSupabaseConfigurationAndHeaders),
+      ("magic link validation", suite.testMagicLinkValidation),
     ]
     for (name, operation) in tests {
       try operation()

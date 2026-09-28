@@ -83,21 +83,21 @@ struct CloudSettings: View {
           }.disabled(store.busy)
           Divider()
           FieldLabel(title: "로그인 이메일") { TextField("이메일 주소", text: $email) }
-          Button("인증번호 받기") {
+          Button("로그인 메일 받기") {
             Task {
               do {
                 let address = email.trimmingCharacters(in: .whitespacesAndNewlines)
                 try await store.sendCode(email: address)
                 sentTo = address
                 code = ""
-                notice = "이메일로 받은 인증번호를 입력해 주세요."
+                notice = "메일의 로그인 링크를 복사해 붙여 넣어 주세요. 숫자 인증번호가 있다면 번호를 넣어도 됩니다."
                 failure = ""
               } catch { failure = error.localizedDescription }
             }
           }.disabled(store.busy || store.configuration == nil)
           if let sentTo {
-            Text("인증번호를 보낸 주소: \(sentTo)").font(.caption)
-            FieldLabel(title: "이메일 인증번호") { TextField("인증번호", text: $code) }
+            Text("메일을 보낸 주소: \(sentTo)").font(.caption)
+            FieldLabel(title: "로그인 링크 또는 인증번호") { SecureField("메일의 링크를 복사해 붙여 넣기", text: $code) }
             Button("로그인 및 동기화") {
               Task {
                 do {

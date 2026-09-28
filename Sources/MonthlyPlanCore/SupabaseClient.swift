@@ -103,16 +103,35 @@ public struct SupabaseClient: Sendable {
         body: JSONSerialization.data(withJSONObject: ["email": email, "create_user": true])))
   }
   public func verify(email: String, code: String) async throws -> SupabaseSession {
-    guard code.range(of: "^[0-9]{6,10}$", options: .regularExpression) != nil else {
-      throw PlanError.invalid("이메일로 받은 숫자 인증번호를 입력해 주세요.")
-    }
+    let parameters = try verificationParameters(email: email, input: code)
     let response = try await send(
       request(
         path: "auth/v1/verify", method: "POST",
-        body: JSONSerialization.data(withJSONObject: [
-          "email": email, "token": code, "type": "email",
-        ])))
-    return try decodeSession(response)
+        body: JSONSerialization.data(withJSONObject: parameters)))
+    let result = try decodeSession(response)
+    guard result.user.email?.caseInsensitiveCompare(email) == .orderedSame else {
+      throw PlanError.invalid("입력한 이메일과 로그인 링크의 계정이 다릅니다.")
+    }
+    return result
+  }
+  public func verificationParameters(email: String, input: String) throws -> [String: String] {
+    if input.range(of: "^[0-9]{6,10}$", options: .regularExpression) != nil {
+      return ["email": email, "token": input, "type": "email"]
+    }
+    guard input.count <= 12000, let link = URLComponents(string: input),
+      link.scheme == "https", link.host == configuration.url.host,
+      link.port == configuration.url.port,
+      link.user == nil, link.password == nil, link.path == "/auth/v1/verify",
+      let token = link.queryItems?.first(where: { $0.name == "token" || $0.name == "token_hash" })?
+        .value,
+      token.range(of: "^[A-Za-z0-9_-]{20,512}$", options: .regularExpression) != nil,
+      let type = link.queryItems?.first(where: { $0.name == "type" })?.value,
+      ["magiclink", "signup", "email"].contains(type)
+    else {
+      throw PlanError.invalid("이메일의 로그인 링크를 복사해 붙여 넣거나 숫자 인증번호를 입력해 주세요. 연결한 프로젝트의 링크만 사용할 수 있습니다.")
+    }
+    // Verify the token directly; never follow a user-supplied redirect destination.
+    return ["token_hash": token, "type": type]
   }
   public func refresh(_ value: SupabaseSession) async throws -> SupabaseSession {
     let response = try await send(

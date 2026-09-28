@@ -144,6 +144,30 @@ extension MonthlyPlanCoreTests {
       try a.load() == [e] && a.pendingCount() == 1,
       "Invalid cloud response leaves local data intact")
   }
+  func testMagicLinkValidation() throws {
+    let client = SupabaseClient(
+      configuration: try SupabaseConfiguration(
+        url: "https://test.supabase.co", publishableKey: "sb_publishable_TEST_FIXTURE_ONLY"))
+    let prefix = "https://test.supabase.co/auth/v1/verify?token=TEST_TOKEN_HASH_1234567890&type="
+    let valid = try client.verificationParameters(
+      email: "example@example.invalid",
+      input: prefix + "magiclink&redirect_to=https%3A%2F%2Funtrusted.invalid")
+    expect(
+      valid["token_hash"] == "TEST_TOKEN_HASH_1234567890" && valid["redirect_to"] == nil,
+      "Only token is verified, no redirect followed")
+    expect(
+      try client.verificationParameters(email: "example@example.invalid", input: prefix + "signup")[
+        "type"] == "signup", "Initial sign-up link supported")
+    for value in [
+      prefix.replacingOccurrences(of: "test.supabase.co", with: "other.supabase.co") + "magiclink",
+      prefix + "recovery", prefix.replacingOccurrences(of: "https:", with: "http:") + "magiclink",
+    ] {
+      do {
+        _ = try client.verificationParameters(email: "example@example.invalid", input: value)
+        preconditionFailure("Reject unrelated credential")
+      } catch {}
+    }
+  }
   func testSupabaseConfigurationAndHeaders() throws {
     let config = try SupabaseConfiguration(
       url: "https://example.supabase.co/", publishableKey: "sb_publishable_TEST_FIXTURE_ONLY")
