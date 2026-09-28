@@ -1,4 +1,5 @@
-import MapKit
+// Older macOS SDKs lack MapKit's Sendable annotations; search results stay on MainActor.
+@preconcurrency import MapKit
 import MonthlyPlanCore
 import SwiftUI
 
