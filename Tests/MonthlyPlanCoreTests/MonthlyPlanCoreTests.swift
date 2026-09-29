@@ -141,29 +141,22 @@ final class MonthlyPlanCoreTests {
 }
 
 extension MonthlyPlanCoreTests {
-  func testGPTRequestSharesOnlyPlaceAndAddress() throws {
-    let client = GPTPlaceClient(key: "TEST_ONLY_NOT_A_REAL_KEY")
-    let req = try client.request(place: "서울숲", address: "서울 성동구")
-    XCTAssertEqual(req.url?.host, "api.openai.com")
-    XCTAssertNil(req.url?.query)
-    XCTAssertEqual(req.value(forHTTPHeaderField: "Authorization"), "Bearer TEST_ONLY_NOT_A_REAL_KEY")
-    XCTAssertEqual(req.httpMethod, "POST")
-    let body = try XCTUnwrap(req.httpBody)
-    let object = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-    XCTAssertEqual(object["store"] as? Bool, false)
-    XCTAssertEqual(object["tool_choice"] as? String, "required")
-    XCTAssertEqual(object["input"] as? String, "장소명: 서울숲\n주소: 서울 성동구")
-    XCTAssertThrowsError(try client.request(place: " ", address: "서울"))
+  func testCodexPromptSharesOnlyPlaceAndAddress() throws {
+    let prompt = try CodexPlaceClient.prompt(place: "서울숲", address: "서울 성동구")
+    XCTAssertTrue(prompt.contains("장소명: 서울숲"))
+    XCTAssertTrue(prompt.contains("주소: 서울 성동구"))
+    XCTAssertTrue(prompt.contains("로컬 파일 읽기"))
+    XCTAssertThrowsError(try CodexPlaceClient.prompt(place: " ", address: "서울"))
   }
-  func testGPTSummaryRequiresSearchAndSafeCitations() throws {
-    let data = Data(#"{"status":"completed","output":[{"type":"web_search_call"},{"type":"message","content":[{"type":"output_text","text":"{\"parking\":\"주차 정보 없음\",\"reviews\":\"후기 없음\"}","annotations":[{"type":"url_citation","title":"출처","url":"https://example.com/place"},{"type":"url_citation","title":"위험","url":"javascript:alert(1)"}]}]}]}"#.utf8)
-    let summary = try GPTPlaceClient.decode(data)
+  func testCodexSummaryRequiresSafeSources() throws {
+    let data = Data(#"{"parking":"주차 정보 없음","reviews":"후기 없음","sources":[{"title":"출처","url":"https://example.com/place"},{"title":"위험","url":"javascript:alert(1)"}]}"#.utf8)
+    let summary = try CodexPlaceClient.decode(data)
     XCTAssertEqual(summary.parking, "주차 정보 없음")
     XCTAssertEqual(summary.reviews, "후기 없음")
     XCTAssertEqual(summary.sources.count, 1)
     XCTAssertEqual(summary.sources.first?.url.host, "example.com")
-    let noSearch = Data(#"{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"{\"parking\":\"추측\",\"reviews\":\"추측\"}"}]}]}"#.utf8)
-    XCTAssertThrowsError(try GPTPlaceClient.decode(noSearch))
+    let noSources = Data(#"{"parking":"추측","reviews":"추측","sources":[]}"#.utf8)
+    XCTAssertThrowsError(try CodexPlaceClient.decode(noSources))
   }
 }
 
@@ -218,8 +211,8 @@ private func XCTAssertNoThrow<T>(
       ("legacy migration", suite.testLegacyJSONImportedOnceWithoutRemovingSource),
       ("duplicate and place validation", suite.testDuplicateIDsAndInvalidPlaceIDRejected),
       ("Naver search URL", suite.testNaverLinkEscapesUserText),
-      ("GPT request data scope", suite.testGPTRequestSharesOnlyPlaceAndAddress),
-      ("GPT source validation", suite.testGPTSummaryRequiresSearchAndSafeCitations),
+      ("Codex prompt data scope", suite.testCodexPromptSharesOnlyPlaceAndAddress),
+      ("Codex source validation", suite.testCodexSummaryRequiresSafeSources),
       ("offline queue restart", suite.testOfflineQueueSurvivesRestart),
       ("two Mac create edit delete", suite.testTwoDeviceCreateEditDelete),
       ("conflict keeps both versions", suite.testConflictPreservesBothAndChooseRemote),

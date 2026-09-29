@@ -3,22 +3,22 @@ import SwiftUI
 
 private actor PlaceSummaryCache {
   static let shared = PlaceSummaryCache()
-  private var entries: [String: (Date, GPTPlaceSummary)] = [:]
+  private var entries: [String: (Date, PlaceSummary)] = [:]
 
-  func get(_ key: String) -> GPTPlaceSummary? {
+  func get(_ key: String) -> PlaceSummary? {
     guard let entry = entries[key], Date().timeIntervalSince(entry.0) < 1800 else { return nil }
     return entry.1
   }
 
-  func set(_ value: GPTPlaceSummary, for key: String) {
+  func set(_ value: PlaceSummary, for key: String) {
     entries[key] = (Date(), value)
   }
 }
 
 struct ExternalPlacesView: View {
   let event: PlanEvent
-  @AppStorage("gptPlaceLookupEnabled") private var enabled = false
-  @State private var summary: GPTPlaceSummary?
+  @AppStorage("codexPlaceLookupEnabled") private var enabled = true
+  @State private var summary: PlaceSummary?
   @State private var loading = false
   @State private var error = ""
   @State private var showSettings = false
@@ -33,9 +33,9 @@ struct ExternalPlacesView: View {
           .buttonStyle(.plain)
       }
       if !enabled {
-        Text("공개 정보를 자동으로 요약하려면 OpenAI API 키를 연결하세요.")
+        Text("Codex 장소 조회가 꺼져 있습니다.")
           .font(.system(size: 12)).foregroundStyle(Color.subtle)
-        Button("GPT 요약 연결") { showSettings = true }.buttonStyle(QuietButtonStyle())
+        Button("자동 조회 설정") { showSettings = true }.buttonStyle(QuietButtonStyle())
       } else if event.place.isEmpty {
         Text("장소 이름을 먼저 입력해 주세요.").font(.caption).foregroundStyle(Color.subtle)
       }
@@ -79,14 +79,11 @@ struct ExternalPlacesView: View {
     loading = true
     defer { loading = false }
     do {
-      guard let key = try OpenAIKeychain.read(), !key.isEmpty else {
-        throw PlanError.invalid("설정에서 OpenAI API 키를 등록해 주세요.")
-      }
       if refresh == 0, let cached = await PlaceSummaryCache.shared.get(event.placeKey) {
         summary = cached
         return
       }
-      let result = try await GPTPlaceClient(key: key).summary(place: event.place, address: event.address)
+      let result = try await CodexPlaceClient().summary(place: event.place, address: event.address)
       try Task.checkCancellation()
       await PlaceSummaryCache.shared.set(result, for: event.placeKey)
       summary = result
