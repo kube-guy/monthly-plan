@@ -141,26 +141,29 @@ final class MonthlyPlanCoreTests {
 }
 
 extension MonthlyPlanCoreTests {
-  func testGoogleRequestScopesAndKeyHeaders() throws {
-    let client = PlacesClient(key: "TEST_ONLY_NOT_A_REAL_KEY")
-    let req = try client.searchRequest(place: "서울숲", address: "서울 성동구")
-    XCTAssertEqual(req.url?.host, "places.googleapis.com")
+  func testGPTRequestSharesOnlyPlaceAndAddress() throws {
+    let client = GPTPlaceClient(key: "TEST_ONLY_NOT_A_REAL_KEY")
+    let req = try client.request(place: "서울숲", address: "서울 성동구")
+    XCTAssertEqual(req.url?.host, "api.openai.com")
     XCTAssertNil(req.url?.query)
-    XCTAssertEqual(req.value(forHTTPHeaderField: "X-Goog-Api-Key"), "TEST_ONLY_NOT_A_REAL_KEY")
+    XCTAssertEqual(req.value(forHTTPHeaderField: "Authorization"), "Bearer TEST_ONLY_NOT_A_REAL_KEY")
     XCTAssertEqual(req.httpMethod, "POST")
-    XCTAssertTrue(req.value(forHTTPHeaderField: "X-Goog-FieldMask")!.contains("places.id"))
-    let detail = try client.detailsRequest(id: "ChIJExample")
-    XCTAssertTrue(detail.value(forHTTPHeaderField: "X-Goog-FieldMask")!.contains("parkingOptions"))
-    XCTAssertThrowsError(try client.detailsRequest(id: "../wrong"))
+    let body = try XCTUnwrap(req.httpBody)
+    let object = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+    XCTAssertEqual(object["store"] as? Bool, false)
+    XCTAssertEqual(object["tool_choice"] as? String, "required")
+    XCTAssertEqual(object["input"] as? String, "장소명: 서울숲\n주소: 서울 성동구")
+    XCTAssertThrowsError(try client.request(place: " ", address: "서울"))
   }
-  func testGoogleParkingMissingIsUnknownAndReviewsDecode() throws {
-    let empty = try JSONDecoder().decode(GooglePlace.self, from: Data(#"{"id":"example"}"#.utf8))
-    XCTAssertTrue(empty.parkingLines.isEmpty)
-    let text =
-      #"{"id":"example","parkingOptions":{"freeParkingLot":true,"valetParking":false},"reviews":[{"name":"r1","rating":4,"text":{"text":"좋았어요","languageCode":"ko"},"authorAttribution":{"displayName":"예시 작성자","uri":"https://www.google.com/maps/contrib/example"},"googleMapsUri":"https://www.google.com/maps/reviews/example"}]}"#
-    let place = try JSONDecoder().decode(GooglePlace.self, from: Data(text.utf8))
-    XCTAssertEqual(place.parkingLines, ["무료 주차장: 제공", "발레파킹: 제공하지 않음"])
-    XCTAssertEqual(place.reviews?.first?.authorAttribution?.displayName, "예시 작성자")
+  func testGPTSummaryRequiresSearchAndSafeCitations() throws {
+    let data = Data(#"{"status":"completed","output":[{"type":"web_search_call"},{"type":"message","content":[{"type":"output_text","text":"{\"parking\":\"주차 정보 없음\",\"reviews\":\"후기 없음\"}","annotations":[{"type":"url_citation","title":"출처","url":"https://example.com/place"},{"type":"url_citation","title":"위험","url":"javascript:alert(1)"}]}]}]}"#.utf8)
+    let summary = try GPTPlaceClient.decode(data)
+    XCTAssertEqual(summary.parking, "주차 정보 없음")
+    XCTAssertEqual(summary.reviews, "후기 없음")
+    XCTAssertEqual(summary.sources.count, 1)
+    XCTAssertEqual(summary.sources.first?.url.host, "example.com")
+    let noSearch = Data(#"{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"{\"parking\":\"추측\",\"reviews\":\"추측\"}"}]}]}"#.utf8)
+    XCTAssertThrowsError(try GPTPlaceClient.decode(noSearch))
   }
 }
 
@@ -215,8 +218,8 @@ private func XCTAssertNoThrow<T>(
       ("legacy migration", suite.testLegacyJSONImportedOnceWithoutRemovingSource),
       ("duplicate and place validation", suite.testDuplicateIDsAndInvalidPlaceIDRejected),
       ("Naver search URL", suite.testNaverLinkEscapesUserText),
-      ("Google request scopes", suite.testGoogleRequestScopesAndKeyHeaders),
-      ("external content decoding", suite.testGoogleParkingMissingIsUnknownAndReviewsDecode),
+      ("GPT request data scope", suite.testGPTRequestSharesOnlyPlaceAndAddress),
+      ("GPT source validation", suite.testGPTSummaryRequiresSearchAndSafeCitations),
       ("offline queue restart", suite.testOfflineQueueSurvivesRestart),
       ("two Mac create edit delete", suite.testTwoDeviceCreateEditDelete),
       ("conflict keeps both versions", suite.testConflictPreservesBothAndChooseRemote),

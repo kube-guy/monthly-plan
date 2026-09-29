@@ -21,8 +21,6 @@ struct PlannerView: View {
   @EnvironmentObject var store: PlanStore
   @State private var month = PlanDate.first(Date())
   @State private var selected: String?
-  @State private var demo = false
-  @State private var samples: [PlanEvent] = []
   @State private var sheet: ActiveSheet?
   @State private var camera: MapCameraPosition = .automatic
   @State private var pendingDelete: PlanEvent?
@@ -30,7 +28,7 @@ struct PlannerView: View {
   @State private var message = ""
   private var monthKey: String { PlanDate.month(month) }
   private var events: [PlanEvent] {
-    PlanDate.sorted(demo ? samples : store.events.filter { $0.date.hasPrefix(monthKey) })
+    PlanDate.sorted(store.events.filter { $0.date.hasPrefix(monthKey) })
   }
   private var visible: [PlanEvent] { events.filter { selected == nil || $0.date == selected } }
   private var mapped: [PlanEvent] { visible.filter(\.hasLocation) }
@@ -109,26 +107,16 @@ struct PlannerView: View {
               MomentsList(events: visible, onSelect: { sheet = .detail($0) }).padding(
                 .horizontal, 22)
             }.frame(maxHeight: 330)
-            if events.isEmpty {
-              Button("예시 둘러보기") {
-                demo = true
-                refreshSamples()
-              }.buttonStyle(.plain).font(.caption).foregroundStyle(Color.forest).padding(22)
-            }
           }.frame(width: 370).background(.white, in: RoundedRectangle(cornerRadius: 13)).overlay(
             RoundedRectangle(cornerRadius: 13).stroke(Color.line))
         }
         HStack {
           Text("monthly-plan · 한 달을 거닐다")
           Spacer()
-          Text(demo ? "예시 일정은 저장되지 않아요." : store.syncStatus).lineLimit(2)
+          Text(store.syncStatus).lineLimit(2)
         }.font(.system(size: 10)).foregroundStyle(Color.subtle).padding(.vertical, 24)
       }.padding(.horizontal, 32)
     }.background(Color.paper)
-      .onAppear {
-        demo = store.events.isEmpty
-        refreshSamples()
-      }
       .task {
         while !Task.isCancelled {
           await store.sync()
@@ -141,7 +129,6 @@ struct PlannerView: View {
         Task { await store.sync() }
       }
       .onChange(of: store.accountID) { _, _ in
-        demo = false
         selected = nil
         sheet = nil
         camera = .automatic
@@ -149,7 +136,6 @@ struct PlannerView: View {
       .onReceive(NotificationCenter.default.publisher(for: .newPlan)) { _ in newEvent() }
       .onChange(of: month) { _, _ in
         selected = nil
-        refreshSamples()
         camera = .automatic
       }
       .sheet(item: $sheet) { item in
@@ -166,10 +152,10 @@ struct PlannerView: View {
           }
         case .settings: PlacesSettings()
         case .cloud: CloudSettings()
-        case .export: ExportSheet(events: events, month: month, isDemo: demo)
+        case .export: ExportSheet(events: events, month: month)
         case .detail(let event):
           EventDetail(
-            event: event, isDemo: demo, onEdit: { sheet = .editor(event) },
+            event: event, onEdit: { sheet = .editor(event) },
             onDelete: {
               pendingDelete = event
               sheet = nil
@@ -236,15 +222,7 @@ struct PlannerView: View {
         selected = nil
       }.font(.system(size: 11))
       Spacer()
-      if demo {
-        Text("둘러보기 · 예시 일정").font(.system(size: 10)).foregroundStyle(Color.subtle)
-        Button("내 일정") {
-          demo = false
-          selected = nil
-        }.font(.system(size: 11))
-      } else {
-        Text("일정 \(events.count)개").font(.system(size: 11)).foregroundStyle(Color.subtle)
-      }
+      Text("일정 \(events.count)개").font(.system(size: 11)).foregroundStyle(Color.subtle)
     }.buttonStyle(.plain).padding(.horizontal, 22).padding(.vertical, 23).background(
       .white, in: RoundedRectangle(cornerRadius: 12))
   }
@@ -279,7 +257,6 @@ struct PlannerView: View {
   private func move(_ value: Int) {
     if let next = PlanDate.calendar.date(byAdding: .month, value: value, to: month) { month = next }
   }
-  private func refreshSamples() { samples = PlanDate.samples(month: monthKey) }
   private func newEvent() {
     sheet = .editor(
       PlanEvent(
@@ -287,7 +264,6 @@ struct PlannerView: View {
           ?? (PlanDate.month(Date()) == monthKey ? PlanDate.string(Date()) : monthKey + "-01")))
   }
   private func didSave(_ event: PlanEvent) {
-    demo = false
     month = PlanDate.first(PlanDate.parse(event.date)!)
     selected = nil
     message = ""
@@ -296,7 +272,6 @@ struct PlannerView: View {
 }
 struct EventDetail: View {
   let event: PlanEvent
-  let isDemo: Bool
   let onEdit: () -> Void
   let onDelete: () -> Void
   @Environment(\.dismiss) var dismiss
@@ -333,14 +308,12 @@ struct EventDetail: View {
         if !event.notes.isEmpty {
           Text(event.notes).font(.system(size: 13)).textSelection(.enabled)
         }
-        if !isDemo {
-          Divider()
-          ExternalPlacesView(event: event)
-          HStack {
-            Button("삭제", role: .destructive, action: onDelete)
-            Spacer()
-            Button("수정", action: onEdit).buttonStyle(PrimaryButtonStyle())
-          }
+        Divider()
+        ExternalPlacesView(event: event)
+        HStack {
+          Button("삭제", role: .destructive, action: onDelete)
+          Spacer()
+          Button("수정", action: onEdit).buttonStyle(PrimaryButtonStyle())
         }
       }.padding(30)
     }.frame(width: 560, height: 680).foregroundStyle(Color.ink).background(Color.paper)

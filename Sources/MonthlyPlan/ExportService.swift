@@ -18,7 +18,6 @@ struct ExportBoard: View {
   let events: [PlanEvent]
   let month: Date
   let mode: ExportMode
-  let isDemo: Bool
   var body: some View {
     VStack(alignment: .leading, spacing: 24) {
       HStack(alignment: .bottom) {
@@ -30,7 +29,6 @@ struct ExportBoard: View {
           Text("기억하고 싶은, 이달의 순간들").font(.system(size: 13)).foregroundStyle(Color.subtle)
         }
         Spacer()
-        if isDemo { Text("둘러보기 · 예시 일정").font(.system(size: 12)).foregroundStyle(Color.subtle) }
       }
       HStack(alignment: .top, spacing: 24) {
         if mode != .moments {
@@ -58,10 +56,10 @@ struct ExportBoard: View {
 @MainActor
 enum ExportService {
   static func write(
-    events: [PlanEvent], month: Date, mode: ExportMode, to url: URL, isDemo: Bool = false
+    events: [PlanEvent], month: Date, mode: ExportMode, to url: URL
   ) throws {
     let board = ExportBoard(
-      events: PlanDate.sorted(events), month: month, mode: mode, isDemo: isDemo)
+      events: PlanDate.sorted(events), month: month, mode: mode)
     let size = NSHostingView(rootView: board).fittingSize
     guard size.width.isFinite, size.height.isFinite, size.width <= 8000, size.height <= 8000 else {
       throw PlanError.invalid("이미지가 너무 큽니다. 달력과 목록을 각각 내보내 주세요.")
@@ -82,7 +80,7 @@ enum ExportService {
     try data.write(to: url, options: .atomic)
   }
   static func chooseAndWrite(
-    events: [PlanEvent], month: Date, mode: ExportMode, format: String, isDemo: Bool
+    events: [PlanEvent], month: Date, mode: ExportMode, format: String
   ) throws -> Bool {
     let panel = NSSavePanel()
     panel.title = "이달의 일정을 이미지로 저장"
@@ -90,14 +88,13 @@ enum ExportService {
     panel.nameFieldStringValue = "monthly-plan-\(PlanDate.month(month))-\(mode.rawValue).\(format)"
     panel.canCreateDirectories = true
     guard panel.runModal() == .OK, let url = panel.url else { return false }
-    try write(events: events, month: month, mode: mode, to: url, isDemo: isDemo)
+    try write(events: events, month: month, mode: mode, to: url)
     return true
   }
 }
 struct ExportSheet: View {
   let events: [PlanEvent]
   let month: Date
-  let isDemo: Bool
   @Environment(\.dismiss) var dismiss
   @State private var mode: ExportMode = .combined
   @State private var format = "png"
@@ -119,7 +116,7 @@ struct ExportSheet: View {
         Button("저장 위치 선택") {
           do {
             if try ExportService.chooseAndWrite(
-              events: events, month: month, mode: mode, format: format, isDemo: isDemo)
+              events: events, month: month, mode: mode, format: format)
             {
               dismiss()
             }

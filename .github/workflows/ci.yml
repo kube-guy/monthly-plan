@@ -19,8 +19,8 @@ jobs:
       - name: Export PNG and JPG
         run: |
           mkdir -p build/previews
-          .build/release/monthly-plan --export-demo build/previews/calendar.png
-          .build/release/monthly-plan --export-demo build/previews/calendar.jpg
+          .build/release/monthly-plan --export-empty build/previews/calendar.png
+          .build/release/monthly-plan --export-empty build/previews/calendar.jpg
           sips -g pixelWidth -g pixelHeight build/previews/calendar.png
 
   database:

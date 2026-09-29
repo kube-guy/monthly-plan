@@ -8,16 +8,16 @@ enum Launcher {
   static func main() {
     let args = CommandLine.arguments
     if args.contains("--version") {
-      print("monthly-plan 0.1.1")
+      print("monthly-plan 0.1.2")
       return
     }
-    if let index = args.firstIndex(of: "--export-demo"), args.count > index + 1 {
+    if let index = args.firstIndex(of: "--export-empty"), args.count > index + 1 {
       _ = NSApplication.shared
       let month = PlanDate.parse("2026-09-01")!
       do {
         try ExportService.write(
-          events: PlanDate.samples(month: "2026-09"), month: month, mode: .combined,
-          to: URL(fileURLWithPath: args[index + 1]), isDemo: true)
+          events: [], month: month, mode: .combined,
+          to: URL(fileURLWithPath: args[index + 1]))
         print("Exported \(args[index+1])")
       } catch {
         fputs("\(error.localizedDescription)\n", stderr)

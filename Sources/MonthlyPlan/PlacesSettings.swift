@@ -2,8 +2,8 @@ import MonthlyPlanCore
 import Security
 import SwiftUI
 
-enum PlacesKeychain {
-  private static let service = "io.github.kube-guy.monthly-plan", account = "google-places-api-key"
+enum OpenAIKeychain {
+  private static let service = "io.github.kube-guy.monthly-plan", account = "openai-api-key"
   private static var query: [String: Any] {
     [
       kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
@@ -45,25 +45,25 @@ enum PlacesKeychain {
 }
 struct PlacesSettings: View {
   @Environment(\.dismiss) var dismiss
-  @AppStorage("externalPlacesEnabled") private var enabled = false
+  @AppStorage("gptPlaceLookupEnabled") private var enabled = false
   @State private var key = ""
   @State private var error = ""
   @State private var hasKey = false
   var body: some View {
     VStack(alignment: .leading, spacing: 19) {
       Text("외부 장소 정보 연결").font(.title2.weight(.semibold))
-      Text("Google Places에서 주차 정보와 리뷰를 불러옵니다. 네이버지도 열기는 별도로 계속 사용할 수 있어요.").font(.system(size: 12))
+      Text("GPT가 공개 웹 정보를 검색해 주차와 후기를 요약합니다. 네이버지도 열기는 별도로 사용할 수 있어요.").font(.system(size: 12))
         .foregroundStyle(Color.subtle)
       Link(
-        "Google Cloud에서 Places API (New) 설정 ↗",
+        "OpenAI API 키 만들기 ↗",
         destination: URL(
-          string: "https://developers.google.com/maps/documentation/places/web-service/get-api-key")!
+          string: "https://platform.openai.com/api-keys")!
       ).font(.system(size: 12))
       FieldLabel(title: hasKey ? "API 키 · 등록됨 (변경할 때만 입력)" : "API 키") {
-        SecureField("Google Places API 키", text: $key)
+        SecureField("OpenAI API 키", text: $key)
       }
       Toggle("장소 상세를 열 때 자동 조회", isOn: $enabled)
-      Text("이 기능을 사용하면 장소명과 주소가 Google에 전송되며 API 사용 요금이 발생할 수 있습니다. 키는 이 Mac의 키체인에만 저장됩니다.").font(
+      Text("장소명과 주소만 OpenAI에 전송합니다. 일정 제목과 메모는 보내지 않습니다. 웹 검색과 API 사용 요금이 발생할 수 있으며, 키는 이 Mac의 키체인에 저장됩니다.").font(
         .system(size: 11)
       ).foregroundStyle(Color.subtle)
       HStack {
@@ -80,7 +80,7 @@ struct PlacesSettings: View {
         if hasKey {
           Button("연결 해제", role: .destructive) {
             do {
-              try PlacesKeychain.remove()
+              try OpenAIKeychain.remove()
               enabled = false
               dismiss()
             } catch { self.error = error.localizedDescription }
@@ -95,7 +95,7 @@ struct PlacesSettings: View {
               guard value.count >= 15 && value.count <= 300 && !value.contains(" ") else {
                 throw PlanError.invalid("API 키 형식을 확인해 주세요.")
               }
-              try PlacesKeychain.save(value)
+              try OpenAIKeychain.save(value)
             } else if !hasKey {
               throw PlanError.invalid("API 키를 입력해 주세요.")
             }
@@ -106,7 +106,7 @@ struct PlacesSettings: View {
       }
     }.textFieldStyle(.roundedBorder).padding(28).frame(width: 520).background(Color.paper).onAppear
     {
-      do { hasKey = try PlacesKeychain.read() != nil } catch {
+      do { hasKey = try OpenAIKeychain.read() != nil } catch {
         self.error = error.localizedDescription
       }
     }

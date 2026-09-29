@@ -2,7 +2,7 @@
 
 한 달의 일정과 장소를 한눈에 보는 Swift macOS 앱입니다. 문장으로 일정을 추가하고, 달력과 **이달의 순간들**을 PNG/JPG로 저장할 수 있습니다. Supabase에 연결하면 여러 Mac에서 같은 계정의 일정을 동기화합니다.
 
-![달력과 이달의 순간들](docs/preview.png)
+빈 달력으로 시작하며, 입력한 일정만 표시됩니다.
 
 ## 설치
 
@@ -31,7 +31,7 @@ open 'build/Monthly Plan.app'
 - 장소 검색과 Apple 지도 표시, 상세에서 **네이버지도 장소 검색** 열기
 - 한국어 문장을 날짜·시간·장소·제목으로 분석하고 수정 가능한 미리보기 제공
 - 달력 / 이달의 순간들 / 둘 다 선택하여 PNG 또는 JPG로 내보내기
-- Google Places의 주차 정보, 평점, 작성자와 출처가 표시된 간단한 리뷰
+- GPT 웹 검색으로 주차 정보와 방문 후기 요약, 출처 링크 표시
 - Supabase 로그인, 여러 Mac 동기화, 오프라인 변경 보관, 충돌 시 두 내용 비교
 
 현재 앱 안의 지도는 **Apple 지도**입니다. 네이버지도는 상세 화면에서 외부 링크로 연결됩니다. 지도와 외부 리뷰는 이미지 내보내기에 포함되지 않습니다.
@@ -63,18 +63,18 @@ open 'build/Monthly Plan.app'
 
 ## 주차와 리뷰 자동 조회
 
-톱니바퀴에서 Google Places API (New) 키를 등록하고 자동 조회를 켭니다. 같은 이름의 다른 지점을 잘못 연결하지 않도록 첫 조회에서는 장소를 선택합니다. 이후 상세 화면에서 해당 장소의 최신 정보를 자동으로 요청합니다.
+톱니바퀴에서 [OpenAI API 키](https://platform.openai.com/api-keys)를 등록하고 자동 조회를 켭니다. 일정 상세를 열면 GPT가 장소명과 주소로 공개 웹을 검색해 주차 정보와 후기의 공통된 경향을 요약하고, 확인한 출처를 링크로 보여줍니다. 장소명과 주소만 전송하며 일정 제목과 메모는 보내지 않습니다.
 
-[Google API 설정](https://developers.google.com/maps/documentation/places/web-service/get-api-key)과 결제 설정이 필요하며, 사용량에 따라 비용이 발생할 수 있습니다. 정보가 없는 장소는 **정보 없음**으로 표시합니다. 리뷰는 제공자가 반환하는 일부 리뷰이며 전체 리뷰가 아닙니다. 네이버 리뷰를 수집하거나 크롤링하지 않습니다.
+OpenAI API 사용 및 웹 검색 요금이 발생할 수 있습니다. 출처를 확인할 수 없으면 요약을 표시하지 않습니다. AI 요약에는 오류나 오래된 정보가 있을 수 있으므로 주차 가능 여부와 요금은 방문 전 원문 또는 장소에 확인하세요. 앱은 네이버 리뷰를 직접 수집하거나 크롤링하지 않습니다.
 
-장소 ID만 동기화하며 외부 주차·리뷰 내용은 디스크나 Supabase에 저장하지 않습니다. Google API 키는 각 Mac의 키체인에 따로 등록합니다.
+요약은 앱 실행 중 메모리에서 30분간 재사용하며 디스크나 Supabase에 저장하지 않습니다. OpenAI API 키는 각 Mac의 키체인에 따로 등록합니다. 이전 버전에서 저장한 Google 장소 ID는 기존 동기화 데이터와의 호환성을 위해 남지만 새 조회에는 사용하지 않습니다.
 
 ## 데이터 보관
 
 - 온라인: 연결한 Supabase 프로젝트의 PostgreSQL, 로그인 사용자별 접근 제한(RLS)
 - 로컬: `~/Library/Application Support/monthly-plan/`
 - 계정별 로컬 캐시: 위 폴더의 `accounts/<project hash>/<user ID>/`
-- 인증 토큰·Google API 키: macOS 키체인
+- 인증 토큰·OpenAI API 키: macOS 키체인
 - 프로젝트 URL·공개 API 키: macOS 앱 설정
 
 로컬 백업은 앱을 종료한 뒤 위 폴더 **전체**를 복사하세요. SQLite 파일 하나를 iCloud Drive에서 동시에 공유하는 방식은 사용하지 않습니다. 클라우드 동기화는 백업과 다르므로 Supabase의 별도 백업 정책도 설정하세요.
@@ -85,8 +85,8 @@ open 'build/Monthly Plan.app'
 swift run --disable-sandbox MonthlyPlanChecks
 swift build --disable-sandbox -c release --product monthly-plan
 .build/release/monthly-plan --version
-.build/release/monthly-plan --export-demo /tmp/monthly-plan.png
-.build/release/monthly-plan --export-demo /tmp/monthly-plan.jpg
+.build/release/monthly-plan --export-empty /tmp/monthly-plan.png
+.build/release/monthly-plan --export-empty /tmp/monthly-plan.jpg
 ```
 
 Foundation 기반 검사 실행기를 포함하므로 XCTest가 없는 Command Line Tools 환경에서도 검증할 수 있습니다. 실제 Supabase 연결에는 위 설정과 이메일 인증이 필요합니다. [`supabase/tests`](supabase/tests)의 SQL 검사는 별도의 테스트 데이터베이스에서만 실행하세요.

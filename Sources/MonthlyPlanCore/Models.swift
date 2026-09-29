@@ -122,21 +122,4 @@ public enum PlanDate {
   public static func sorted(_ values: [PlanEvent]) -> [PlanEvent] {
     values.sorted { ($0.date, $0.time, $0.id.uuidString) < ($1.date, $1.time, $1.id.uuidString) }
   }
-  public static func samples(month: String) -> [PlanEvent] {
-    let rows: [(Int, String, String, String, PlanCategory, Double, Double)] = [
-      (4, "서촌에서 느긋한 브런치", "서촌", "11:30", .personal, 37.5798, 126.9697),
-      (8, "새로운 프로젝트 미팅", "성수동", "14:00", .work, 37.5445, 127.0557),
-      (12, "주말의 작은 전시", "국립현대미술관 서울", "13:00", .culture, 37.5797, 126.9802),
-      (16, "책 한 권, 커피 한 잔", "연남동", "15:00", .personal, 37.5635, 126.9246),
-      (19, "초록 속에서 쉬어가기", "서울숲", "16:00", .personal, 37.5444, 127.0374),
-      (24, "계절을 담는 하루", "북촌", "10:00", .trip, 37.5826, 126.9830),
-      (27, "친구들과 저녁 약속", "한남동", "18:30", .personal, 37.5354, 127.0013),
-    ]
-    return rows.map { day, title, place, time, category, lat, lng in
-      PlanEvent(
-        title: title, date: String(format: "%@-%02d", month, day), time: time, place: place,
-        category: category, notes: "둘러보기용 예시 일정입니다. 실제 약속이 아니며 위치는 지역의 대표 지점입니다.", latitude: lat,
-        longitude: lng)
-    }
-  }
 }

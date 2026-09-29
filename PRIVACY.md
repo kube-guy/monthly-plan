@@ -10,17 +10,16 @@ Supabase 프로젝트를 설정하고 로그인하면 해당 계정에서 작성
 
 오프라인 변경은 계정별 SQLite 캐시에 보관합니다. 로그아웃해도 미전송 변경 보호를 위해 캐시는 삭제하지 않습니다. 같은 계정으로 다시 로그인하면 이어서 동기화합니다. 로그인 전에 만든 일정은 '이 Mac의 기존 일정 가져오기'를 실행할 때만 현재 계정에 복사·전송됩니다. 삭제 기록은 다른 기기에 삭제를 전달하기 위해 서버에 남지만 일정 본문은 제거합니다.
 
-프로젝트 URL·공개 API 키는 앱 설정에, 로그인 토큰과 Google API 키는 macOS 키체인에 저장합니다. 다른 Mac에는 API 키를 별도로 등록해야 합니다. 앱은 로컬 데이터베이스를 자체 암호화하지 않으므로 기기의 로그인 보안과 FileVault 등 운영체제 보호를 사용하세요.
+프로젝트 URL·공개 API 키는 앱 설정에, 로그인 토큰과 OpenAI API 키는 macOS 키체인에 저장합니다. 다른 Mac에는 API 키를 별도로 등록해야 합니다. 앱은 로컬 데이터베이스를 자체 암호화하지 않으므로 기기의 로그인 보안과 FileVault 등 운영체제 보호를 사용하세요.
 
 ## 지도와 외부 장소 정보
 
 - 장소 검색과 지도 표시: Apple MapKit에 검색어 및 지도 요청을 전송합니다.
 - 네이버지도 열기: 사용자가 누르면 장소명 또는 주소가 포함된 네이버지도 검색 링크를 엽니다.
-- 주차·리뷰 자동 조회: 사용자가 키를 등록하고 활성화한 경우 장소명·주소 또는 장소 ID를 Google Places로 전송합니다. API 이용 요금이 발생할 수 있습니다.
-- Google 주차·평점·리뷰 내용은 앱 실행 중 표시용으로만 사용하며 로컬 디스크 또는 Supabase에 저장하지 않습니다. 다시 찾기 위한 Google Place ID만 저장·동기화합니다.
-- 리뷰 작성자 이미지가 있으면 해당 제공 URL을 불러옵니다. 원문 링크는 사용자가 선택할 때 열립니다.
+- 주차·후기 자동 요약: 사용자가 OpenAI API 키를 등록하고 활성화한 경우 장소명과 주소만 OpenAI Responses API에 전송하고 웹 검색을 요청합니다. 일정 제목·메모·날짜·시간은 보내지 않습니다. API와 웹 검색 요금이 발생할 수 있습니다.
+- 요약과 출처는 앱 실행 중 메모리에서 최대 30분 재사용하며 로컬 디스크나 Supabase에 저장하지 않습니다. 이전 버전의 Google 장소 ID는 호환성을 위해 보관할 수 있으나 새 조회에는 사용하지 않습니다. 출처 링크는 사용자가 선택할 때 열립니다.
 
-외부 서비스에는 [Apple 개인정보 처리방침](https://www.apple.com/legal/privacy/), [네이버 개인정보 처리방침](https://policy.naver.com/policy/privacy.html), [Google 개인정보 처리방침](https://policies.google.com/privacy), [Supabase 개인정보 처리방침](https://supabase.com/privacy)이 적용됩니다.
+외부 서비스에는 [Apple 개인정보 처리방침](https://www.apple.com/legal/privacy/), [네이버 개인정보 처리방침](https://policy.naver.com/policy/privacy.html), [OpenAI 개인정보 처리방침](https://openai.com/policies/privacy-policy/), [Supabase 개인정보 처리방침](https://supabase.com/privacy)이 적용됩니다.
 
 ## 이미지와 백업
 
