@@ -49,7 +49,7 @@ open 'build/Monthly Plan.app'
 
 ## 여러 Mac에서 같은 일정 보기
 
-앱 상단 **클라우드 연결**에서 Supabase 프로젝트 URL과 publishable/anon 키를 입력한 뒤 이메일의 로그인 링크 또는 인증번호로 로그인하세요. 다른 Mac에도 같은 프로젝트를 연결하고 같은 이메일로 로그인하면 됩니다.
+앱 상단 **클라우드 연결**에서 Supabase 프로젝트 URL과 publishable/anon 키를 입력한 뒤 이메일의 로그인 링크를 같은 Mac에서 열어 로그인하세요. 다른 Mac에도 같은 프로젝트를 연결하고 같은 이메일로 로그인하면 됩니다.
 
 **먼저 [Supabase 설정 안내](docs/SUPABASE.md)에 따라 데이터베이스와 인증 메일을 설정해야 합니다.** Supabase 관리 화면에 GitHub 계정으로 로그인하는 것과 앱 안에서 일정을 동기화하는 사용자 로그인은 별개입니다.
 

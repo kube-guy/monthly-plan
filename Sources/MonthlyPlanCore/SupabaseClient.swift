@@ -50,8 +50,21 @@ public struct SupabaseSession: Codable, Sendable {
 public enum SupabaseFailure: LocalizedError {
   case unauthorized
   case rejected(Int)
+  case authentication(String)
   public var errorDescription: String? {
     switch self {
+    case .authentication("otp_expired"):
+      "로그인 링크가 만료되었거나 이미 사용되었습니다. 앱에서 새 로그인 메일을 요청하고, 이 Mac에서 가장 최근 메일의 링크를 열어 주세요."
+    case .authentication("over_email_send_rate_limit"), .authentication("over_request_rate_limit"):
+      "인증 메일 발송 한도에 도달했습니다. 잠시 기다렸다가 다시 요청해 주세요. Supabase의 이메일 발송 한도도 확인할 수 있습니다."
+    case .authentication("email_address_not_authorized"):
+      "현재 Supabase 기본 메일 서비스는 이 이메일로 발송할 수 없습니다. 프로젝트 소유자 이메일을 사용하거나 프로젝트에 SMTP를 연결해 주세요."
+    case .authentication("email_provider_disabled"), .authentication("signup_disabled"):
+      "Supabase에서 이메일 로그인 또는 신규 가입이 꺼져 있습니다. 프로젝트의 인증 설정을 확인해 주세요."
+    case .authentication("email_not_confirmed"):
+      "이메일 확인이 완료되지 않았습니다. 가장 최근 가입 확인 메일의 링크를 복사해 앱에 붙여 넣어 주세요."
+    case .authentication:
+      "이메일 인증을 완료하지 못했습니다. 가장 최근에 받은 로그인 메일을 사용해 주세요."
     case .unauthorized: "로그인이 만료되었습니다. 다시 로그인해 주세요. 아직 전송하지 못한 변경은 이 Mac에 남아 있습니다."
     case .rejected(400): "인증번호·입력값 또는 Supabase 설정을 확인해 주세요. 인증번호는 한 번만 사용할 수 있습니다."
     case .rejected(403): "Supabase 접근 권한을 확인해 주세요. 이메일 인증과 데이터베이스 정책 설정이 필요합니다."
@@ -93,14 +106,37 @@ public struct SupabaseClient: Sendable {
     if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
     return request
   }
-  public func sendCode(email: String) async throws {
+  public func sendCode(email: String, login: EmailLogin? = nil) async throws {
     guard email.contains("@"), email.count <= 254 else {
       throw PlanError.invalid("이메일 주소를 확인해 주세요.")
     }
+    var body: [String: Any] = ["email": email, "create_user": true]
+    var query: [URLQueryItem] = []
+    if let login {
+      guard login.email == email else { throw PlanError.invalid("로그인 이메일을 확인해 주세요.") }
+      body["code_challenge"] = EmailLogin.challenge(for: login.verifier)
+      body["code_challenge_method"] = "s256"
+      query = [.init(name: "redirect_to", value: login.redirect.absoluteString)]
+    }
     _ = try await send(
       request(
-        path: "auth/v1/otp", method: "POST",
-        body: JSONSerialization.data(withJSONObject: ["email": email, "create_user": true])))
+        path: "auth/v1/otp", method: "POST", query: query,
+        body: JSONSerialization.data(withJSONObject: body)))
+  }
+  public func completeLogin(callback: URL, login: EmailLogin) async throws -> SupabaseSession {
+    let code = try login.authorizationCode(from: callback)
+    let response = try await send(
+      request(
+        path: "auth/v1/token", method: "POST",
+        query: [.init(name: "grant_type", value: "pkce")],
+        body: JSONSerialization.data(withJSONObject: [
+          "auth_code": code, "code_verifier": login.verifier,
+        ])))
+    let result = try decodeSession(response)
+    guard result.user.email?.caseInsensitiveCompare(login.email) == .orderedSame else {
+      throw PlanError.invalid("요청한 이메일과 로그인 계정이 다릅니다.")
+    }
+    return result
   }
   public func verify(email: String, code: String) async throws -> SupabaseSession {
     let parameters = try verificationParameters(email: email, input: code)
@@ -190,6 +226,16 @@ public struct SupabaseClient: Sendable {
     let (data, response) = try await session.data(for: request)
     guard let response = response as? HTTPURLResponse else { throw SupabaseFailure.rejected(0) }
     guard (200..<300).contains(response.statusCode) else {
+      if let error = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        let code = (error["error_code"] ?? error["code"]) as? String,
+        [
+          "otp_expired", "over_email_send_rate_limit", "over_request_rate_limit",
+          "email_address_not_authorized", "email_provider_disabled", "signup_disabled",
+          "email_not_confirmed",
+        ].contains(code)
+      {
+        throw SupabaseFailure.authentication(code)
+      }
       if response.statusCode == 401 { throw SupabaseFailure.unauthorized }
       throw SupabaseFailure.rejected(response.statusCode)
     }

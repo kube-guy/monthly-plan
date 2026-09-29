@@ -8,7 +8,7 @@ enum Launcher {
   static func main() {
     let args = CommandLine.arguments
     if args.contains("--version") {
-      print("monthly-plan 0.1.0")
+      print("monthly-plan 0.1.1")
       return
     }
     if let index = args.firstIndex(of: "--export-demo"), args.count > index + 1 {
@@ -35,6 +35,7 @@ struct MonthlyPlanApplication: App {
     WindowGroup("monthly-plan") {
       PlannerView().environmentObject(store).frame(minWidth: 1020, minHeight: 680)
         .preferredColorScheme(.light)
+        .onOpenURL { url in Task { await store.handleLoginCallback(url) } }
     }
     .defaultSize(width: 1240, height: 890)
     .commands {

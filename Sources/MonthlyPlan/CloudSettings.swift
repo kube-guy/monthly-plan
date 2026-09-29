@@ -90,14 +90,16 @@ struct CloudSettings: View {
                 try await store.sendCode(email: address)
                 sentTo = address
                 code = ""
-                notice = "메일의 로그인 링크를 복사해 붙여 넣어 주세요. 숫자 인증번호가 있다면 번호를 넣어도 됩니다."
+                notice = "새 메일의 로그인 링크를 이 Mac에서 열면 앱으로 돌아와 로그인됩니다. 앱은 열린 상태로 두세요."
                 failure = ""
               } catch { failure = error.localizedDescription }
             }
           }.disabled(store.busy || store.configuration == nil)
           if let sentTo {
             Text("메일을 보낸 주소: \(sentTo)").font(.caption)
-            FieldLabel(title: "로그인 링크 또는 인증번호") { SecureField("메일의 링크를 복사해 붙여 넣기", text: $code) }
+            FieldLabel(title: "앱이 열리지 않을 때 · 링크 또는 인증번호") {
+              SecureField("메일의 링크를 복사해 붙여 넣기", text: $code)
+            }
             Button("로그인 및 동기화") {
               Task {
                 do {
@@ -120,6 +122,7 @@ struct CloudSettings: View {
         }
         if !notice.isEmpty { Text(notice).font(.caption).foregroundStyle(Color.forest) }
         if !failure.isEmpty { Text(failure).font(.caption).foregroundStyle(.red) }
+        if let error = store.error { Text(error).font(.caption).foregroundStyle(.red) }
       }.padding(28)
     }.textFieldStyle(.roundedBorder).frame(width: 600, height: 700).background(Color.paper)
       .onAppear {

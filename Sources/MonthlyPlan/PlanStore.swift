@@ -16,6 +16,7 @@ final class PlanStore: ObservableObject {
   @Published private(set) var pendingCount = 0
   @Published private(set) var lastSync: Date?
   private var session: SupabaseSession?
+  private var pendingLogin: EmailLogin?
   private var repository: EventRepository?
   private let directory: URL
   var signedIn: Bool { session != nil }
@@ -110,12 +111,16 @@ final class PlanStore: ObservableObject {
     let value = try SupabaseConfiguration(url: url, publishableKey: key)
     UserDefaults.standard.set(try JSONEncoder().encode(value), forKey: "supabaseConfiguration")
     configuration = value
+    pendingLogin = nil
   }
   func sendCode(email: String) async throws {
     guard !busy, let configuration else { throw PlanError.invalid("프로젝트를 연결한 뒤 다시 시도해 주세요.") }
     authBusy = true
     defer { authBusy = false }
-    try await SupabaseClient(configuration: configuration).sendCode(email: email)
+    let login = EmailLogin(email: email)
+    try await SupabaseClient(configuration: configuration).sendCode(email: email, login: login)
+    pendingLogin = login
+    error = nil
   }
   func login(email: String, code: String) async throws {
     guard !busy, let configuration else { throw PlanError.invalid("프로젝트를 연결한 뒤 다시 시도해 주세요.") }
@@ -124,6 +129,7 @@ final class PlanStore: ObservableObject {
       let value = try await SupabaseClient(configuration: configuration).verify(
         email: email, code: code)
       try CloudCredentials.save(value, project: configuration.projectKey)
+      pendingLogin = nil
       // Clear the previous view before switching accounts, including on disk errors.
       session = value
       repository = nil
@@ -138,6 +144,30 @@ final class PlanStore: ObservableObject {
       throw error
     }
   }
+  func handleLoginCallback(_ url: URL) async {
+    guard !busy, let configuration, let pendingLogin else {
+      error = "이 Mac의 앱에서 새 로그인 메일을 요청한 뒤 링크를 열어 주세요."
+      return
+    }
+    authBusy = true
+    do {
+      let value = try await SupabaseClient(configuration: configuration).completeLogin(
+        callback: url, login: pendingLogin)
+      try CloudCredentials.save(value, project: configuration.projectKey)
+      self.pendingLogin = nil
+      session = value
+      repository = nil
+      events = []
+      conflicts = []
+      accountEmail = nil
+      try openRepository()
+      authBusy = false
+      await sync()
+    } catch {
+      authBusy = false
+      self.error = error.localizedDescription
+    }
+  }
   func logout() async throws {
     guard !busy else { throw PlanError.invalid("현재 동기화가 끝난 뒤 다시 시도해 주세요.") }
     authBusy = true
@@ -148,6 +178,7 @@ final class PlanStore: ObservableObject {
       try? await SupabaseClient(configuration: configuration).logout(session.accessToken)
     }
     session = nil
+    pendingLogin = nil
     repository = nil
     events = []
     conflicts = []

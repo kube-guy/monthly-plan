@@ -233,6 +233,6 @@ private func XCTAssertNoThrow<T>(
       print("PASS \(name)")
     }
     try await runTransportChecks()
-    print("\(tests.count + 3) checks passed")
+    print("\(tests.count + 6) checks passed")
   }
 }

@@ -102,4 +102,42 @@ func runTransportChecks() async throws {
     preconditionFailure("401 must fail")
   } catch SupabaseFailure.unauthorized {}
   print("PASS Supabase expired session handling")
+  let attempt = EmailLogin(email: "example@example.invalid")
+  precondition(
+    EmailLogin.challenge(for: "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk")
+      == "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM")
+  let callback = URL(
+    string: attempt.redirect.absoluteString + "&code=40000000-0000-0000-0000-000000000001")!
+  MockHTTP.state.reset([(200, Data("{}".utf8)), (200, auth)])
+  try await client.sendCode(email: attempt.email, login: attempt)
+  _ = try await client.completeLogin(callback: callback, login: attempt)
+  let pkce = MockHTTP.state.recorded()
+  let sent = try body(pkce[0])
+  let exchanged = try body(pkce[1])
+  precondition(sent["code_challenge_method"] as? String == "s256")
+  precondition(sent["code_challenge"] as? String == EmailLogin.challenge(for: attempt.verifier))
+  precondition(exchanged["code_verifier"] as? String == attempt.verifier)
+  precondition(pkce[0].url!.absoluteString.contains("redirect_to="))
+  precondition(pkce[1].url!.query == "grant_type=pkce")
+  print("PASS email callback PKCE challenge and exchange")
+  for bad in [
+    callback.absoluteString.replacingOccurrences(of: attempt.state, with: "different-state"),
+    callback.absoluteString.replacingOccurrences(of: "monthly-plan:", with: "https:"),
+    callback.absoluteString + "&state=" + attempt.state,
+  ] {
+    do {
+      _ = try attempt.authorizationCode(from: URL(string: bad)!)
+      preconditionFailure("Reject foreign login callback")
+    } catch {}
+  }
+  print("PASS callback request binding")
+  MockHTTP.state.reset([
+    (403, Data(#"{"error_code":"otp_expired","msg":"Email link is invalid"}"#.utf8))
+  ])
+  do {
+    _ = try await client.verify(email: "example@example.invalid", code: "12345678")
+    preconditionFailure("Expired link must fail")
+  } catch SupabaseFailure.authentication(let code) { precondition(code == "otp_expired") }
+  print("PASS expired email error is distinct from database permissions")
+
 }
