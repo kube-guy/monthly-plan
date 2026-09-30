@@ -35,7 +35,7 @@ public final class EventRepository {
       try execute("PRAGMA journal_mode = WAL")
       let version =
         try query("PRAGMA user_version").first.flatMap { $0.first }.flatMap(Int.init) ?? 0
-      guard version <= 2 else {
+      guard version <= 3 else {
         throw PlanError.invalid("더 새로운 앱에서 만든 데이터입니다. monthly-plan을 업데이트해 주세요.")
       }
       if version == 0 {
@@ -67,6 +67,14 @@ public final class EventRepository {
               id: "place:" + row[0], value: SyncValue(placeKey: row[0], googlePlaceID: row[1]))
           }
           try execute("PRAGMA user_version = 2")
+        }
+      }
+      if version < 3 {
+        try transaction {
+          try execute(
+            "CREATE TABLE place_summaries (place_key TEXT PRIMARY KEY NOT NULL, payload TEXT NOT NULL)"
+          )
+          try execute("PRAGMA user_version = 3")
         }
       }
       if let legacyURL, FileManager.default.fileExists(atPath: legacyURL.path),
@@ -130,6 +138,33 @@ public final class EventRepository {
       try enqueue(id: "place:" + event.placeKey, value: nil, deleted: true)
     }
   }
+  public func summary(for event: PlanEvent) throws -> PlaceSummary? {
+    guard !event.place.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+    guard let payload = try query(
+      "SELECT payload FROM place_summaries WHERE place_key = ?", [event.placeKey]
+    ).first?.first else { return nil }
+    return try JSONDecoder().decode(PlaceSummary.self, from: Data(payload.utf8)).validated()
+  }
+  @discardableResult
+  public func saveSummary(_ summary: PlaceSummary, for event: PlanEvent) throws -> PlaceSummary {
+    guard !event.place.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+      throw PlanError.invalid("장소 이름을 입력해 주세요.")
+    }
+    let checked = try summary.validated()
+    var saved = checked
+    try transaction {
+      if let existing = try self.summary(for: event) {
+        saved = existing
+        return
+      }
+      let payload = try json(checked)
+      try execute("INSERT INTO place_summaries(place_key,payload) VALUES(?,?)", [event.placeKey, payload])
+      try enqueue(
+        id: "summary:" + event.placeKey,
+        value: SyncValue(summaryKey: event.placeKey, summary: checked))
+    }
+    return saved
+  }
   public func pending() throws -> [SyncMutation] {
     try query(
       "SELECT payload FROM sync_queue WHERE id NOT IN (SELECT id FROM sync_conflicts) ORDER BY id"
@@ -170,6 +205,10 @@ public final class EventRepository {
           rebased.baseRevision = remote.revision
           try setQueue(rebased)
           try setRevision(remote)
+        } else if remote.id.hasPrefix("summary:") && remote.revision > local.baseRevision {
+          // Saved summaries are immutable; the first cloud version wins automatically.
+          try clearPending(remote.id)
+          try install(remote)
         } else if remote.revision > local.baseRevision {
           try execute(
             "INSERT INTO sync_conflicts(id,payload) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload",
@@ -226,7 +265,12 @@ public final class EventRepository {
     try execute("DELETE FROM sync_conflicts WHERE id = ?", [id])
   }
   private func install(_ remote: SyncRecord) throws {
-    if remote.id.hasPrefix("place:") {
+    if remote.id.hasPrefix("summary:") {
+      let key = String(remote.id.dropFirst(8))
+      try execute(
+        "INSERT INTO place_summaries(place_key,payload) VALUES(?,?) ON CONFLICT(place_key) DO UPDATE SET payload=excluded.payload",
+        [key, try json(remote.value!.summary!)])
+    } else if remote.id.hasPrefix("place:") {
       let key = String(remote.id.dropFirst(6))
       if remote.deleted {
         try execute("DELETE FROM external_places WHERE place_key = ?", [key])

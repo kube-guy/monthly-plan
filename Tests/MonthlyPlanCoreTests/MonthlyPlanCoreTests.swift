@@ -47,6 +47,10 @@ final class MonthlyPlanCoreTests {
   }
   func testMissingAndAmbiguousTime() throws {
     XCTAssertEqual(try parse("서울숲에서 산책").event.date, "")
+    let withoutTime = try parse("내일 서울숲에서 산책")
+    XCTAssertEqual(withoutTime.event.time, "09:00")
+    XCTAssertTrue(withoutTime.warnings.contains("시간이 없어 오전 9시로 설정했어요."))
+    XCTAssertNoThrow(try withoutTime.event.validated())
     XCTAssertEqual(try parse("내일 3시 서울숲에서 산책").event.time, "")
     XCTAssertEqual(try parse("2월 30일 오후 3시 산책").event.date, "")
     XCTAssertEqual(try parse("내일 밤 12시 집에서 영화").event.time, "")
@@ -72,6 +76,7 @@ final class MonthlyPlanCoreTests {
     XCTAssertThrowsError(try NaturalParser.parse(""))
   }
   func testValidationAndOvernight() throws {
+    XCTAssertEqual(PlanEvent().time, "09:00")
     var p = PlanEvent(title: "약속", date: "2026-09-28", time: "23:00", endTime: "01:00")
     XCTAssertThrowsError(try p.validated())
     p.endTime = ""
@@ -220,6 +225,7 @@ private func XCTAssertNoThrow<T>(
       ("edit during upload", suite.testEditingDuringUploadDoesNotLoseChanges),
       ("delete during upload", suite.testDeletingDuringUploadDoesNotResurrect),
       ("place mapping sync", suite.testExternalPlaceSyncAndUnlink),
+      ("place summary persistence and sync", suite.testPlaceSummaryPersistsAndFirstCloudResultWins),
       ("invalid remote response", suite.testInvalidRemoteDoesNotDamageLocal),
       ("Supabase configuration safety", suite.testSupabaseConfigurationAndHeaders),
       ("magic link validation", suite.testMagicLinkValidation),

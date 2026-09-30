@@ -32,7 +32,7 @@ public struct PlanEvent: Codable, Identifiable, Equatable, Sendable {
   public var latitude: Double?
   public var longitude: Double?
   public init(
-    id: UUID = UUID(), title: String = "", date: String = "", time: String = "10:00",
+    id: UUID = UUID(), title: String = "", date: String = "", time: String = "09:00",
     endTime: String = "", place: String = "", address: String = "",
     category: PlanCategory = .personal, notes: String = "", latitude: Double? = nil,
     longitude: Double? = nil

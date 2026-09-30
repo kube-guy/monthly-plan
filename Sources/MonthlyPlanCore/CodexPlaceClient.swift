@@ -1,15 +1,34 @@
 import Foundation
 
-public struct PlaceSummarySource: Sendable, Identifiable {
+public struct PlaceSummarySource: Codable, Equatable, Sendable, Identifiable {
   public let title: String
   public let url: URL
   public var id: String { url.absoluteString }
+  public init(title: String, url: URL) { self.title = title; self.url = url }
 }
 
-public struct PlaceSummary: Sendable {
+public struct PlaceSummary: Codable, Equatable, Sendable {
   public let parking: String
   public let reviews: String
   public let sources: [PlaceSummarySource]
+  public init(parking: String, reviews: String, sources: [PlaceSummarySource]) {
+    self.parking = parking
+    self.reviews = reviews
+    self.sources = sources
+  }
+  public func validated() throws -> Self {
+    guard !parking.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+      !reviews.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+      parking.count <= 4000, reviews.count <= 4000, (1...10).contains(sources.count),
+      sources.allSatisfy({ source in
+        !source.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+          && source.title.count <= 300 && source.url.scheme?.lowercased() == "https"
+          && source.url.host != nil && source.url.user == nil && source.url.password == nil
+          && source.url.absoluteString.count <= 2000
+      })
+    else { throw PlanError.invalid("장소 요약 또는 출처가 올바르지 않습니다.") }
+    return self
+  }
 }
 
 public struct CodexPlaceClient: Sendable {
@@ -43,14 +62,15 @@ public struct CodexPlaceClient: Sendable {
     var seen = Set<String>()
     let sources: [PlaceSummarySource] = fields.sources.compactMap { source in
       guard let url = URL(string: source.url), url.scheme?.lowercased() == "https",
-        url.host != nil, seen.insert(url.absoluteString).inserted else { return nil }
+        url.host != nil, url.user == nil, url.password == nil,
+        seen.insert(url.absoluteString).inserted else { return nil }
       let title = source.title.trimmingCharacters(in: .whitespacesAndNewlines)
       return PlaceSummarySource(title: title.isEmpty ? url.host! : title, url: url)
     }
     guard !sources.isEmpty else {
       throw PlanError.invalid("인용 가능한 출처를 찾지 못했습니다. 다시 시도해 주세요.")
     }
-    return PlaceSummary(parking: fields.parking, reviews: fields.reviews, sources: sources)
+    return try PlaceSummary(parking: fields.parking, reviews: fields.reviews, sources: sources).validated()
   }
 
   public func summary(place: String, address: String) async throws -> PlaceSummary {

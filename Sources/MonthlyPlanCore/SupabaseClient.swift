@@ -222,6 +222,23 @@ public struct SupabaseClient: Sendable {
       request(path: "rest/v1/monthly_plan_records", token: token, query: query))
     return try JSONDecoder().decode([SyncRecord].self, from: data).map { try $0.validated() }
   }
+  public func pullSummary(key: String, token: String) async throws -> SyncRecord? {
+    guard key.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil else {
+      throw PlanError.invalid("장소 식별자가 올바르지 않습니다.")
+    }
+    let id = "summary:" + key
+    let data = try await send(request(
+      path: "rest/v1/monthly_plan_records", token: token,
+      query: [
+        .init(name: "select", value: "id,revision,mutation_id,value,deleted"),
+        .init(name: "id", value: "eq.\(id)"),
+        .init(name: "limit", value: "1"),
+      ]))
+    let records = try JSONDecoder().decode([SyncRecord].self, from: data)
+    guard let record = records.first else { return nil }
+    guard record.id == id else { throw PlanError.invalid("다른 장소의 요약을 받았습니다.") }
+    return try record.validated()
+  }
   private func send(_ request: URLRequest) async throws -> Data {
     let (data, response) = try await session.data(for: request)
     guard let response = response as? HTTPURLResponse else { throw SupabaseFailure.rejected(0) }

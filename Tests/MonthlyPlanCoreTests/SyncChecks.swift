@@ -130,6 +130,25 @@ extension MonthlyPlanCoreTests {
     try a.receive(accepted(unlink))
     expect(try a.externalPlaceID(for: e) == nil, "Unlink syncs")
   }
+  func testPlaceSummaryPersistsAndFirstCloudResultWins() throws {
+    let a = try repo()
+    let b = try repo()
+    let event = PlanEvent(title: "방문", date: "2026-09-28", place: "서울숲", address: "서울 성동구")
+    let source = PlaceSummarySource(title: "공식 안내", url: URL(string: "https://example.com/place")!)
+    let first = PlaceSummary(parking: "주차 확인", reviews: "후기 확인", sources: [source])
+    let second = PlaceSummary(parking: "다른 결과", reviews: "다른 후기", sources: [source])
+    expect(try a.saveSummary(first, for: event) == first, "Initial summary saved")
+    expect(try a.saveSummary(second, for: event) == first, "Repeated detail does not replace summary")
+    expect(try a.pendingCount() == 1, "Repeated detail does not enqueue another lookup")
+    let reopened = try EventRepository(fileURL: a.fileURL)
+    expect(try reopened.summary(for: event) == first, "Summary survives app restart")
+    let cloud = accepted(try a.pending()[0])
+    try b.saveSummary(second, for: event)
+    try b.receive(cloud)
+    expect(try b.summary(for: event) == first, "First cloud result wins across Macs")
+    expect(try b.pendingCount() == 0, "Losing draft does not remain queued")
+    expect(try b.conflicts().isEmpty, "Immutable summary has no manual conflict")
+  }
   func testInvalidRemoteDoesNotDamageLocal() throws {
     let a = try repo()
     let e = PlanEvent(title: "안전한 원본", date: "2026-09-28")

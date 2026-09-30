@@ -100,6 +100,44 @@ final class PlanStore: ObservableObject {
     try reload()
     scheduleSync()
   }
+  func cachedPlaceSummary(for event: PlanEvent) throws -> PlaceSummary? {
+    try ready().summary(for: event)
+  }
+  func placeSummary(for event: PlanEvent) async throws -> PlaceSummary {
+    let repo = try ready()
+    let identity = accountID
+    if let cached = try repo.summary(for: event) { return cached }
+    if let configuration, var auth = session {
+      let client = SupabaseClient(configuration: configuration)
+      if auth.needsRefresh {
+        auth = try await client.refresh(auth)
+        guard accountID == identity, repository === repo else {
+          throw PlanError.invalid("계정이 바뀌었습니다. 다시 열어 주세요.")
+        }
+        try CloudCredentials.save(auth, project: configuration.projectKey)
+        session = auth
+      }
+      if let remote = try await client.pullSummary(key: event.placeKey, token: auth.accessToken) {
+        guard accountID == identity, repository === repo else {
+          throw PlanError.invalid("계정이 바뀌었습니다. 다시 열어 주세요.")
+        }
+        try repo.receive(remote)
+        guard let cached = try repo.summary(for: event) else {
+          throw PlanError.invalid("저장된 장소 요약을 읽지 못했습니다.")
+        }
+        return cached
+      }
+    }
+    let result = try await CodexPlaceClient().summary(place: event.place, address: event.address)
+    try Task.checkCancellation()
+    guard accountID == identity, repository === repo else {
+      throw PlanError.invalid("계정이 바뀌었습니다. 다시 열어 주세요.")
+    }
+    let saved = try repo.saveSummary(result, for: event)
+    try reload()
+    if signedIn { await sync() }
+    return saved
+  }
   private func scheduleSync() {
     if signedIn {
       syncStatus = "변경 \(pendingCount)개 전송 대기"
@@ -199,6 +237,13 @@ final class PlanStore: ObservableObject {
       return copy
     }
     try save(copies)
+    for event in originals {
+      if let summary = try local.summary(for: event) {
+        try ready().saveSummary(summary, for: event)
+      }
+    }
+    try reload()
+    scheduleSync()
   }
   func resolve(_ conflict: SyncConflict, keepLocal: Bool) throws {
     guard !busy else { throw PlanError.invalid("동기화가 끝난 뒤 선택해 주세요.") }

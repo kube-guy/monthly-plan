@@ -105,7 +105,7 @@ public enum NaturalParser {
       var warnings: [String] = []
       let date = datePart(source, reference: reference)
       var rest = date.1
-      var event = PlanEvent(date: date.0, time: "")
+      var event = PlanEvent(date: date.0)
       if PlanDate.parse(date.0) == nil {
         event.date = ""
         warnings.append("날짜를 확인해 주세요.")
@@ -119,7 +119,11 @@ public enum NaturalParser {
           if event.endTime.isEmpty { warnings.append("종료 시간을 확인해 주세요.") }
         }
       }
-      if event.time.isEmpty { warnings.append("시작 시간을 오전·오후 또는 24시간 형식으로 입력해 주세요.") }
+      if times.isEmpty {
+        warnings.append("시간이 없어 오전 9시로 설정했어요.")
+      } else if event.time.isEmpty {
+        warnings.append("시작 시간을 오전·오후 또는 24시간 형식으로 입력해 주세요.")
+      }
       if times.count > 2 { warnings.append("한 줄에는 일정 하나만 입력해 주세요.") }
       if !event.endTime.isEmpty && event.endTime <= event.time {
         warnings.append("종료 시간은 같은 날의 시작보다 늦어야 해요.")

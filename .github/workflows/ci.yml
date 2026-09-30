@@ -49,4 +49,5 @@ jobs:
         run: |
           psql -v ON_ERROR_STOP=1 -f supabase/tests/bootstrap.sql
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/202609280001_initial.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/202609290001_place_summaries.sql
           psql -v ON_ERROR_STOP=1 -f supabase/tests/security.sql

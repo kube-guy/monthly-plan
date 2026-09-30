@@ -42,7 +42,7 @@ struct EventEditor: View {
             }
           }
           HStack {
-            FieldLabel(title: "시작 시간") { TextField("14:00", text: $event.time) }
+            FieldLabel(title: "시작 시간 · 기본 오전 9시") { TextField("09:00", text: $event.time) }
             FieldLabel(title: "종료 시간 · 선택") { TextField("15:00", text: $event.endTime) }
           }
           HStack(alignment: .bottom) {
@@ -100,6 +100,9 @@ struct EventEditor: View {
         }.buttonStyle(QuietButtonStyle())
         Button("일정 저장") {
           do {
+            if event.time.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+              event.time = "09:00"
+            }
             let value = try event.validated()
             try onSave(value)
             dismiss()
@@ -154,7 +157,7 @@ struct NaturalEntrySheet: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 18) {
       Text("문장으로 일정 추가").font(.title2.weight(.semibold))
-      Text("한 줄에 하나씩, 최대 20개의 일정을 적어 주세요. 분석 결과는 자유롭게 고칠 수 있어요.").font(.system(size: 12))
+      Text("한 줄에 하나씩, 최대 20개의 일정을 적어 주세요. 시간을 생략하면 오전 9시로 저장돼요.").font(.system(size: 12))
         .foregroundStyle(Color.subtle)
       Text("내일 오후 3시 서울숲에서 산책\n10월 3일 오후 2시부터 4시까지 성수동 카페에서 친구 만나기").font(.system(size: 11))
         .foregroundStyle(Color.subtle).textSelection(.enabled)
@@ -184,7 +187,7 @@ struct NaturalEntrySheet: View {
                 TextField("일정 이름", text: $row.event.title)
                 HStack {
                   TextField("YYYY-MM-DD", text: $row.event.date)
-                  TextField("시작 HH:mm", text: $row.event.time)
+                  TextField("시작 HH:mm · 기본 09:00", text: $row.event.time)
                   TextField("종료 · 선택", text: $row.event.endTime)
                 }
                 HStack {

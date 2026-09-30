@@ -4,10 +4,15 @@ public struct SyncValue: Codable, Equatable, Sendable {
   public var event: PlanEvent?
   public var placeKey: String?
   public var googlePlaceID: String?
-  public init(event: PlanEvent? = nil, placeKey: String? = nil, googlePlaceID: String? = nil) {
+  public var summaryKey: String?
+  public var summary: PlaceSummary?
+  public init(event: PlanEvent? = nil, placeKey: String? = nil, googlePlaceID: String? = nil,
+    summaryKey: String? = nil, summary: PlaceSummary? = nil) {
     self.event = event
     self.placeKey = placeKey
     self.googlePlaceID = googlePlaceID
+    self.summaryKey = summaryKey
+    self.summary = summary
   }
 }
 public struct SyncMutation: Codable, Equatable, Sendable, Identifiable {
@@ -45,18 +50,28 @@ public struct SyncRecord: Codable, Equatable, Sendable, Identifiable {
   }
   public func validated() throws -> Self {
     guard revision > 0 else { throw PlanError.invalid("동기화 버전이 올바르지 않습니다.") }
-    if id.hasPrefix("place:") {
+    if id.hasPrefix("summary:") {
+      let key = String(id.dropFirst(8))
+      guard key.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil,
+        !deleted, value?.summaryKey == key, value?.event == nil,
+        value?.placeKey == nil, value?.googlePlaceID == nil,
+        let summary = value?.summary
+      else { throw PlanError.invalid("동기화 장소 요약이 올바르지 않습니다.") }
+      _ = try summary.validated()
+    } else if id.hasPrefix("place:") {
       let key = String(id.dropFirst(6))
       guard key.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil,
         deleted
-          || (value?.placeKey == key && value?.event == nil
+          || (value?.placeKey == key && value?.event == nil && value?.summaryKey == nil
+            && value?.summary == nil
             && value?.googlePlaceID?.range(
               of: "^[A-Za-z0-9_-]{1,255}$", options: .regularExpression) != nil)
       else { throw PlanError.invalid("동기화 장소 정보가 올바르지 않습니다.") }
     } else {
       guard let uuid = UUID(uuidString: id), id == uuid.uuidString,
         deleted
-          || (value?.event?.id == uuid && value?.placeKey == nil && value?.googlePlaceID == nil)
+          || (value?.event?.id == uuid && value?.placeKey == nil && value?.googlePlaceID == nil
+            && value?.summaryKey == nil && value?.summary == nil)
       else { throw PlanError.invalid("동기화 일정 정보가 올바르지 않습니다.") }
       if !deleted { _ = try value!.event!.validated() }
     }

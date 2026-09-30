@@ -6,6 +6,10 @@ set local role authenticated;
 set local request.jwt.claim.sub = '10000000-0000-0000-0000-000000000001';
 do $$
 declare result jsonb; payload jsonb := '{"event":{"id":"20000000-0000-0000-0000-000000000001","title":"test","date":"2026-09-28"}}';
+  summary_id text := 'summary:' || repeat('a',64);
+  summary_payload jsonb := jsonb_build_object('summaryKey', repeat('a',64), 'summary',
+    jsonb_build_object('parking','주차 정보','reviews','후기 요약','sources',
+      jsonb_build_array(jsonb_build_object('title','출처','url','https://example.com/place'))));
 begin
   result := public.monthly_plan_push('20000000-0000-0000-0000-000000000001',0,'30000000-0000-0000-0000-000000000001',payload,false);
   if (result->>'revision')::int <> 1 then raise exception 'Create revision'; end if;
@@ -25,6 +29,15 @@ begin
   begin
     perform public.monthly_plan_push('20000000-0000-0000-0000-000000000002',0,'30000000-0000-0000-0000-000000000001',payload,false);
     raise exception 'Mismatched payload id accepted';
+  exception when invalid_parameter_value then null; end;
+  result := public.monthly_plan_push(summary_id,0,'30000000-0000-0000-0000-000000000006',summary_payload,false);
+  if (result->>'revision')::int <> 1 then raise exception 'Summary create failed'; end if;
+  result := public.monthly_plan_push(summary_id,0,'30000000-0000-0000-0000-000000000007',
+    jsonb_set(summary_payload,'{summary,parking}','"다른 내용"'),false);
+  if result->'value'->'summary'->>'parking' <> '주차 정보' then raise exception 'Saved summary overwritten'; end if;
+  begin
+    perform public.monthly_plan_push(summary_id,1,'30000000-0000-0000-0000-000000000008',null,true);
+    raise exception 'Summary deletion accepted';
   exception when invalid_parameter_value then null; end;
 end $$;
 set local request.jwt.claim.sub = '10000000-0000-0000-0000-000000000002';
@@ -53,4 +66,4 @@ do $$ begin
   exception when insufficient_privilege then null; end;
 end $$;
 rollback;
-\echo 'PASS: ownership, RLS, anonymous access, direct-write denial, CAS, retry, tombstone, payload checks'
+\echo 'PASS: ownership, RLS, anonymous access, direct-write denial, CAS, retry, tombstone, immutable summary, payload checks'

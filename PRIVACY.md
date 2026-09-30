@@ -17,7 +17,7 @@ Supabase 프로젝트를 설정하고 로그인하면 해당 계정에서 작성
 - 장소 검색과 지도 표시: Apple MapKit에 검색어 및 지도 요청을 전송합니다.
 - 네이버지도 열기: 사용자가 누르면 장소명 또는 주소가 포함된 네이버지도 검색 링크를 엽니다.
 - 주차·후기 자동 요약: 앱이 사용자의 Codex CLI 로그인으로 웹 검색을 실행합니다. 장소명과 주소만 Codex에 전달하며 일정 제목·메모·날짜·시간은 보내지 않습니다. Codex 사용량이 소모될 수 있습니다.
-- 요약과 출처는 앱 실행 중 메모리에서 최대 30분 재사용하며 로컬 디스크나 Supabase에 저장하지 않습니다. Codex 조회는 읽기 전용 임시 세션에서 실행합니다. 이전 버전의 Google 장소 ID는 호환성을 위해 보관할 수 있으나 새 조회에는 사용하지 않습니다. 출처 링크는 사용자가 선택할 때 열립니다.
+- 첫 조회의 요약과 출처는 계정별 SQLite에 저장합니다. 로그인한 경우 같은 계정의 다른 Mac에서도 사용하도록 Supabase에 동기화합니다. Codex 조회는 읽기 전용 임시 세션에서 실행합니다. 이전 버전의 Google 장소 ID는 호환성을 위해 보관할 수 있으나 새 조회에는 사용하지 않습니다. 출처 링크는 사용자가 선택할 때 열립니다.
 
 외부 서비스에는 [Apple 개인정보 처리방침](https://www.apple.com/legal/privacy/), [네이버 개인정보 처리방침](https://policy.naver.com/policy/privacy.html), [OpenAI 개인정보 처리방침](https://openai.com/policies/privacy-policy/), [Supabase 개인정보 처리방침](https://supabase.com/privacy)이 적용됩니다.
 

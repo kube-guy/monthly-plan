@@ -10,7 +10,7 @@ struct PlacesSettings: View {
       Text("이 Mac에 로그인된 Codex CLI가 공개 웹을 검색해 주차와 후기를 요약합니다.")
         .font(.system(size: 12)).foregroundStyle(Color.subtle)
       Toggle("장소 상세를 열 때 자동 조회", isOn: $enabled)
-      Text("장소명과 주소만 Codex에 전달합니다. 일정 제목·날짜·메모는 전달하지 않습니다. Codex 사용량이 소모될 수 있으며, 결과는 30분간 앱 메모리에서만 재사용합니다.")
+      Text("장소명과 주소만 Codex에 전달합니다. 일정 제목·날짜·메모는 전달하지 않습니다. Codex 사용량은 최초 조회 시에만 소모되며, 요약은 저장되어 같은 계정의 다른 Mac에서도 다시 사용됩니다.")
         .font(.system(size: 11)).foregroundStyle(Color.subtle)
       Text("다른 Mac에서도 Codex CLI를 설치한 뒤 ChatGPT 계정으로 로그인해야 합니다.")
         .font(.system(size: 11)).foregroundStyle(Color.subtle)
