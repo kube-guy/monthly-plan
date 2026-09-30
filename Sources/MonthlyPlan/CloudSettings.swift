@@ -164,7 +164,7 @@ struct CloudSettings: View {
             Button("캘린더 새로고침") { google.refresh() }
           }
         } else {
-          Button("Mac 캘린더 읽기 허용") { Task { await google.requestAccess() } }
+          Button("Mac 캘린더 읽기 허용") { google.requestAccess() }
             .buttonStyle(PrimaryButtonStyle())
         }
         if let error = google.error { Text(error).font(.caption).foregroundStyle(.red) }

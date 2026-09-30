@@ -28,14 +28,15 @@ final class GoogleCalendarStore: ObservableObject {
     refresh()
   }
 
-  func requestAccess() async {
-    do {
-      let granted = try await eventStore.requestFullAccessToEvents()
-      if !granted { error = "캘린더 읽기 권한을 허용해야 일정을 표시할 수 있어요." }
-      refresh()
-    } catch {
-      self.error = error.localizedDescription
-      refresh()
+  func requestAccess() {
+    eventStore.requestFullAccessToEvents { [weak self] granted, requestError in
+      let message = requestError?.localizedDescription
+      Task { @MainActor in
+        guard let self else { return }
+        if let message { self.error = message }
+        else if !granted { self.error = "캘린더 읽기 권한을 허용해야 일정을 표시할 수 있어요." }
+        self.refresh()
+      }
     }
   }
 
