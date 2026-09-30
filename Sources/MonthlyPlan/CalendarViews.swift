@@ -5,6 +5,7 @@ struct CalendarCard: View {
   let month: Date
   let events: [PlanEvent]
   var selected: String? = nil
+  var externalIDs: Set<UUID> = []
   var expanded = false
   var onDay: ((String) -> Void)? = nil
   var onEvent: ((PlanEvent) -> Void)? = nil
@@ -72,8 +73,9 @@ struct CalendarCard: View {
           onEvent?(event)
         } label: {
           VStack(alignment: .leading, spacing: 2) {
-            Text(event.title).font(.system(size: 10, weight: .medium)).lineLimit(expanded ? 2 : 1)
-            Text(event.time).font(.system(size: 9))
+            Text(externalIDs.contains(event.id) ? "▸ \(event.title)" : event.title)
+              .font(.system(size: 10, weight: .medium)).lineLimit(expanded ? 2 : 1)
+            Text(event.displayTime).font(.system(size: 9))
           }.frame(maxWidth: .infinity, alignment: .leading).padding(5).foregroundStyle(
             event.category.color
           ).background(event.category.color.opacity(0.10), in: RoundedRectangle(cornerRadius: 4))
@@ -95,6 +97,7 @@ struct CalendarCard: View {
 struct MomentsList: View {
   let events: [PlanEvent]
   var expanded = false
+  var externalIDs: Set<UUID> = []
   var onSelect: ((PlanEvent) -> Void)? = nil
   var body: some View {
     VStack(spacing: 0) {
@@ -111,12 +114,13 @@ struct MomentsList: View {
             }.frame(width: 43, height: 49).background(
               Color(hex: 0xF3F5ED), in: RoundedRectangle(cornerRadius: 8))
             VStack(alignment: .leading, spacing: 7) {
-              Text(event.title).font(.system(size: 12, weight: .medium)).foregroundStyle(Color.ink)
+              Text(externalIDs.contains(event.id) ? "▸ \(event.title)" : event.title)
+                .font(.system(size: 12, weight: .medium)).foregroundStyle(Color.ink)
                 .lineLimit(expanded ? nil : 2)
               HStack(spacing: 4) {
                 Image(systemName: "mappin")
                 Text(event.place.isEmpty ? "장소 미정" : event.place).lineLimit(1)
-                Text("· \(event.time)")
+                Text("· \(event.displayTime)")
               }.font(.system(size: 10)).foregroundStyle(Color.subtle)
             }
             Spacer(minLength: 4)

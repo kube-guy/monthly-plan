@@ -87,6 +87,14 @@ final class MonthlyPlanCoreTests {
     p.latitude = .nan
     XCTAssertThrowsError(try p.validated())
   }
+  func testCalendarDisplayAndLegacyEventDecode() throws {
+    let original = PlanEvent(title: "여행", date: "2026-09-28", time: "00:00", isAllDay: true)
+    XCTAssertEqual(original.displayTime, "종일")
+    let legacy = #"{"id":"00000000-0000-0000-0000-000000000001","title":"회의","date":"2026-09-28","time":"09:00","endTime":"","place":"","address":"","category":"work","notes":"","latitude":null,"longitude":null}"#
+    let decoded = try JSONDecoder().decode(PlanEvent.self, from: Data(legacy.utf8))
+    XCTAssertEqual(decoded.displayTime, "09:00")
+    XCTAssertEqual(decoded.isAllDay, nil)
+  }
   func testSQLiteRoundTripAtomicBatchAndDelete() throws {
     let url = try directory().appendingPathComponent("plans.sqlite")
     let repo = try EventRepository(fileURL: url)
@@ -211,6 +219,7 @@ private func XCTAssertNoThrow<T>(
       ("explicit labels", suite.testExplicitLabels),
       ("input limits", suite.testBatchLimits),
       ("event validation", suite.testValidationAndOvernight),
+      ("calendar display compatibility", suite.testCalendarDisplayAndLegacyEventDecode),
       ("SQLite atomic persistence", suite.testSQLiteRoundTripAtomicBatchAndDelete),
       ("external place linking", suite.testExternalPlaceMappingAndDeletion),
       ("legacy migration", suite.testLegacyJSONImportedOnceWithoutRemovingSource),

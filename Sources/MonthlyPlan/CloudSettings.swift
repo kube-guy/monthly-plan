@@ -3,6 +3,7 @@ import SwiftUI
 
 struct CloudSettings: View {
   @EnvironmentObject var store: PlanStore
+  @EnvironmentObject var google: GoogleCalendarStore
   @Environment(\.dismiss) private var dismiss
   @State private var projectURL = ""
   @State private var key = ""
@@ -134,6 +135,39 @@ struct CloudSettings: View {
           )
           .font(.caption)
         }
+        Divider()
+        Label("Google Calendar", systemImage: "calendar").font(.headline)
+        Text("Mac의 캘린더에 Google 계정을 연결한 뒤, 표시할 캘린더를 선택하세요. 일정은 읽기 전용으로 달력·이달의 순간들과 이미지 내보내기에 표시됩니다. Supabase로 복사하지 않습니다.")
+          .font(.caption).foregroundStyle(Color.subtle)
+        Link("Mac에 Google 계정 연결하는 방법 ↗", destination: URL(string: "https://support.apple.com/guide/mac-help/mh35565/mac")!)
+          .font(.caption)
+        if google.authorized {
+          if google.calendars.isEmpty {
+            Text("Mac 캘린더에 연결된 계정이 없습니다. Google 계정을 먼저 연결해 주세요.")
+              .font(.caption).foregroundStyle(Color.subtle)
+          } else {
+            Text("Google 계정 이름 아래의 캘린더를 선택하세요. 다른 계정의 캘린더도 목록에 표시될 수 있습니다.")
+              .font(.caption).foregroundStyle(Color.subtle)
+            ForEach(google.calendars) { calendar in
+              Button {
+                google.toggle(calendar.id)
+              } label: {
+                HStack(spacing: 9) {
+                  Image(systemName: google.selectedIDs.contains(calendar.id) ? "checkmark.square.fill" : "square")
+                  Circle().fill(calendar.color).frame(width: 8, height: 8)
+                  Text(calendar.title)
+                  Spacer()
+                  Text(calendar.account).font(.caption).foregroundStyle(Color.subtle)
+                }
+              }.buttonStyle(.plain)
+            }
+            Button("캘린더 새로고침") { google.refresh() }
+          }
+        } else {
+          Button("Mac 캘린더 읽기 허용") { Task { await google.requestAccess() } }
+            .buttonStyle(PrimaryButtonStyle())
+        }
+        if let error = google.error { Text(error).font(.caption).foregroundStyle(.red) }
         if !notice.isEmpty { Text(notice).font(.caption).foregroundStyle(Color.forest) }
         if !failure.isEmpty { Text(failure).font(.caption).foregroundStyle(.red) }
         if let error = store.error { Text(error).font(.caption).foregroundStyle(.red) }

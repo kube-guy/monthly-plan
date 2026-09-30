@@ -1,4 +1,5 @@
 import MapKit
+import EventKit
 import MonthlyPlanCore
 import SwiftUI
 
@@ -19,6 +20,7 @@ private enum ActiveSheet: Identifiable {
 }
 struct PlannerView: View {
   @EnvironmentObject var store: PlanStore
+  @StateObject private var google = GoogleCalendarStore()
   @State private var month = PlanDate.first(Date())
   @State private var selected: String?
   @State private var sheet: ActiveSheet?
@@ -28,8 +30,9 @@ struct PlannerView: View {
   @State private var message = ""
   private var monthKey: String { PlanDate.month(month) }
   private var events: [PlanEvent] {
-    PlanDate.sorted(store.events.filter { $0.date.hasPrefix(monthKey) })
+    PlanDate.sorted(store.events.filter { $0.date.hasPrefix(monthKey) } + google.events)
   }
+  private var googleEventIDs: Set<UUID> { Set(google.events.map(\.id)) }
   private var visible: [PlanEvent] { events.filter { selected == nil || $0.date == selected } }
   private var mapped: [PlanEvent] { visible.filter(\.hasLocation) }
   var body: some View {
@@ -65,7 +68,7 @@ struct PlannerView: View {
           VStack(spacing: 0) {
             calendarToolbar
             CalendarCard(
-              month: month, events: events, selected: selected,
+              month: month, events: events, selected: selected, externalIDs: googleEventIDs,
               onDay: {
                 selected = selected == $0 ? nil : $0
                 camera = .automatic
@@ -104,7 +107,7 @@ struct PlannerView: View {
               }
             }.padding(.horizontal, 22).padding(.top, 22)
             ScrollView {
-              MomentsList(events: visible, onSelect: { sheet = .detail($0) }).padding(
+              MomentsList(events: visible, externalIDs: googleEventIDs, onSelect: { sheet = .detail($0) }).padding(
                 .horizontal, 22)
             }.frame(maxHeight: 330)
           }.frame(width: 370).background(.white, in: RoundedRectangle(cornerRadius: 13)).overlay(
@@ -118,6 +121,7 @@ struct PlannerView: View {
       }.padding(.horizontal, 32)
     }.background(Color.paper)
       .task {
+        google.setMonth(month)
         while !Task.isCancelled {
           await store.sync()
           do { try await Task.sleep(for: .seconds(60)) } catch { break }
@@ -127,6 +131,10 @@ struct PlannerView: View {
         NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
       ) { _ in
         Task { await store.sync() }
+        google.refresh()
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .EKEventStoreChanged)) { _ in
+        google.refresh()
       }
       .onChange(of: store.accountID) { _, _ in
         selected = nil
@@ -137,6 +145,7 @@ struct PlannerView: View {
       .onChange(of: month) { _, _ in
         selected = nil
         camera = .automatic
+        google.setMonth(month)
       }
       .sheet(item: $sheet) { item in
         switch item {
@@ -151,11 +160,12 @@ struct PlannerView: View {
             if let first = values.first { didSave(first) }
           }
         case .settings: PlacesSettings()
-        case .cloud: CloudSettings()
+        case .cloud: CloudSettings().environmentObject(google)
         case .export: ExportSheet(events: events, month: month)
         case .detail(let event):
           EventDetail(
-            event: event, onEdit: { sheet = .editor(event) },
+            event: event, readOnly: googleEventIDs.contains(event.id),
+            onEdit: { sheet = .editor(event) },
             onDelete: {
               pendingDelete = event
               sheet = nil
@@ -222,6 +232,11 @@ struct PlannerView: View {
         selected = nil
       }.font(.system(size: 11))
       Spacer()
+      Button {
+        sheet = .cloud
+      } label: {
+        Label("Google Calendar", systemImage: "calendar")
+      }.font(.system(size: 11))
       Text("일정 \(events.count)개").font(.system(size: 11)).foregroundStyle(Color.subtle)
     }.buttonStyle(.plain).padding(.horizontal, 22).padding(.vertical, 23).background(
       .white, in: RoundedRectangle(cornerRadius: 12))
@@ -272,6 +287,7 @@ struct PlannerView: View {
 }
 struct EventDetail: View {
   let event: PlanEvent
+  var readOnly = false
   let onEdit: () -> Void
   let onDelete: () -> Void
   @Environment(\.dismiss) var dismiss
@@ -279,6 +295,10 @@ struct EventDetail: View {
     ScrollView {
       VStack(alignment: .leading, spacing: 19) {
         HStack {
+          if readOnly {
+            Label("Mac 캘린더 · 읽기 전용", systemImage: "calendar").font(.caption)
+              .foregroundStyle(Color.subtle)
+          }
           Text(event.category.label).font(.caption).padding(7).foregroundStyle(event.category.color)
             .background(event.category.color.opacity(0.1), in: RoundedRectangle(cornerRadius: 5))
           Spacer()
@@ -290,7 +310,7 @@ struct EventDetail: View {
         }
         Text(event.title).font(.title2.weight(.semibold))
         Label(
-          "\(event.date) · \(event.time)\(event.endTime.isEmpty ? "":" – "+event.endTime)",
+          "\(event.date) · \(event.displayTime)\(event.endTime.isEmpty ? "":" – "+event.endTime)",
           systemImage: "clock"
         ).font(.system(size: 13)).foregroundStyle(Color.subtle)
         Label(event.place.isEmpty ? "장소 미정" : event.place, systemImage: "mappin")
@@ -302,18 +322,20 @@ struct EventDetail: View {
             .system(size: 13)
           ).tint(Color.forest)
         }
-        if !event.hasLocation && !event.place.isEmpty {
+        if !readOnly && !event.hasLocation && !event.place.isEmpty {
           Text("일정 수정에서 장소를 찾으면 지도에도 표시됩니다.").font(.caption).foregroundStyle(Color.subtle)
         }
         if !event.notes.isEmpty {
           Text(event.notes).font(.system(size: 13)).textSelection(.enabled)
         }
-        Divider()
-        ExternalPlacesView(event: event)
-        HStack {
-          Button("삭제", role: .destructive, action: onDelete)
-          Spacer()
-          Button("수정", action: onEdit).buttonStyle(PrimaryButtonStyle())
+        if !readOnly {
+          Divider()
+          ExternalPlacesView(event: event)
+          HStack {
+            Button("삭제", role: .destructive, action: onDelete)
+            Spacer()
+            Button("수정", action: onEdit).buttonStyle(PrimaryButtonStyle())
+          }
         }
       }.padding(30)
     }.frame(width: 560, height: 680).foregroundStyle(Color.ink).background(Color.paper)

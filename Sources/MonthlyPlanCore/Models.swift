@@ -31,11 +31,12 @@ public struct PlanEvent: Codable, Identifiable, Equatable, Sendable {
   public var notes: String
   public var latitude: Double?
   public var longitude: Double?
+  public var isAllDay: Bool?
   public init(
     id: UUID = UUID(), title: String = "", date: String = "", time: String = "09:00",
     endTime: String = "", place: String = "", address: String = "",
     category: PlanCategory = .personal, notes: String = "", latitude: Double? = nil,
-    longitude: Double? = nil
+    longitude: Double? = nil, isAllDay: Bool? = nil
   ) {
     self.id = id
     self.title = title
@@ -48,7 +49,9 @@ public struct PlanEvent: Codable, Identifiable, Equatable, Sendable {
     self.notes = notes
     self.latitude = latitude
     self.longitude = longitude
+    self.isAllDay = isAllDay
   }
+  public var displayTime: String { isAllDay == true ? "종일" : time }
   public var hasLocation: Bool { latitude != nil && longitude != nil }
   public var naverURL: URL? {
     let query = address.isEmpty ? place : address

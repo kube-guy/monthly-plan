@@ -11,3 +11,5 @@ Codex가 공개 웹에서 찾은 정보의 요약과 출처 링크를 표시합�
 Apple 지도와 네이버지도는 해당 서비스의 이용 조건을 따릅니다. 이 앱은 Apple, OpenAI, 네이버의 공식 앱이 아닙니다.
 
 Supabase 동기화는 사용자가 연결한 프로젝트와 이메일 인증 설정을 사용합니다. Supabase 요금제·사용량·백업·메일 발송 설정은 프로젝트 소유자가 관리하며 [Supabase 이용약관](https://supabase.com/terms)이 적용됩니다. 동기화는 백업을 대체하지 않습니다.
+
+Google Calendar 표시는 Mac에 연결된 캘린더를 읽기 전용으로 사용합니다. 계정 연결과 동기화는 macOS 및 Google의 설정·이용 조건에 따릅니다. 앱에서 Google 일정을 수정하거나 Supabase로 복사하지 않습니다.

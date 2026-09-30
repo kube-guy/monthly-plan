@@ -8,7 +8,7 @@ enum Launcher {
   static func main() async {
     let args = CommandLine.arguments
     if args.contains("--version") {
-      print("monthly-plan 0.1.4")
+      print("monthly-plan 0.1.5")
       return
     }
     if let index = args.firstIndex(of: "--export-empty"), args.count > index + 1 {
