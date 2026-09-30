@@ -32,8 +32,8 @@ open 'build/Monthly Plan.app'
 - 한국어 문장을 날짜·시간·장소·제목으로 분석하고 수정 가능한 미리보기 제공
 - 달력 / 이달의 순간들 / 둘 다 선택하여 PNG 또는 JPG로 내보내기 (기본 위치: 다운로드 폴더)
 - 로그인된 Codex CLI의 웹 검색으로 주차 정보와 방문 후기 요약, 출처 링크 표시
-- Supabase 로그인, 여러 Mac 동기화, 오프라인 변경 보관, 충돌 시 두 내용 비교
-- Mac 캘린더에 연결된 Google Calendar 일정 읽기 전용 표시
+- Supabase 이메일·Google 계정 로그인, 여러 Mac 동기화, 오프라인 변경 보관, 충돌 시 두 내용 비교
+- Mac 캘린더 또는 Google 계정 직접 연결로 Google Calendar 일정 읽기 전용 표시
 
 현재 앱 안의 지도는 **Apple 지도**입니다. 네이버지도는 상세 화면에서 외부 링크로 연결됩니다. 지도와 외부 리뷰는 이미지 내보내기에 포함되지 않습니다.
 
@@ -50,11 +50,13 @@ open 'build/Monthly Plan.app'
 
 ## 여러 Mac에서 같은 일정 보기
 
-앱 상단 **클라우드 연결**에서 Supabase 프로젝트 URL과 publishable/anon 키를 입력한 뒤 이메일의 로그인 링크를 같은 Mac에서 열어 로그인하세요. 다른 Mac에도 같은 프로젝트를 연결하고 같은 이메일로 로그인하면 됩니다.
+앱 상단 **클라우드 연결**에서 Supabase 프로젝트 URL과 publishable/anon 키를 입력한 뒤 이메일 로그인 링크 또는 Google 계정으로 로그인하세요. 다른 Mac에도 같은 프로젝트를 연결하고 같은 계정으로 로그인하면 됩니다.
 
 **먼저 [Supabase 설정 안내](docs/SUPABASE.md)에 따라 데이터베이스와 인증 메일을 설정해야 합니다.** Supabase 관리 화면에 GitHub 계정으로 로그인하는 것과 앱 안에서 일정을 동기화하는 사용자 로그인은 별개입니다.
 
 **계정 · 동기화** 화면의 `연결된 Supabase 프로젝트 열기` 링크로 설정한 프로젝트의 관리 화면을 바로 열 수 있습니다.
+
+이메일 대신 **Google 계정으로 로그인**할 수도 있습니다. 프로젝트 관리자가 [Google 로그인 설정](docs/GOOGLE_LOGIN.md)을 마친 뒤 **계정 · 동기화 → Google 계정으로 로그인**을 누르세요. 같은 이메일이어도 Google 계정으로 처음 로그인하는 경우 Supabase의 계정 연결 상태를 확인하세요. 다른 이메일로 로그인하면 다른 일정 계정이 열립니다.
 
 - 저장 직후, 앱 활성화 시, 앱이 열린 동안 약 60초마다 동기화합니다.
 - 오프라인 변경은 SQLite에 보관하고 다음 연결에서 재시도합니다. 앱 종료 중에는 동기화하지 않습니다.
@@ -66,9 +68,9 @@ open 'build/Monthly Plan.app'
 
 ## Google Calendar 연결
 
-Mac의 **시스템 설정 → 인터넷 계정**에서 Google 계정을 추가하고 캘린더 동기화를 켭니다. 앱의 **Google Calendar** 또는 **계정 · 동기화**에서 **Mac 캘린더 읽기 허용**을 누른 뒤, 계정 이름을 확인하며 표시할 캘린더를 선택하세요. 선택한 일정은 월별 달력과 **이달의 순간들**, PNG/JPG 내보내기에 나타납니다. 여러 날에 걸친 일정은 해당 날짜마다 표시되며 종일 일정은 `종일`로 표시됩니다.
+두 가지 방법이 있습니다. Mac의 **시스템 설정 → 인터넷 계정**에서 Google 계정을 추가하고 캘린더 동기화를 켠 뒤, 앱에서 **Mac 캘린더 읽기 허용**을 누를 수 있습니다. 또는 [Google Calendar 직접 연결 설정](docs/GOOGLE_CALENDAR.md)을 마치고 앱의 **계정 · 동기화 → Google 계정으로 직접 연결**을 사용할 수 있습니다. 두 방법 모두 표시할 캘린더를 선택하세요. 일정은 월별 달력과 **이달의 순간들**, PNG/JPG 내보내기에 나타납니다. 여러 날에 걸친 일정은 해당 날짜마다 표시되며 종일 일정은 `종일`로 표시됩니다.
 
-Google 일정은 읽기 전용입니다. 앱의 일정으로 복사하거나 Supabase에 전송하지 않으며, 수정·삭제는 Mac 캘린더 또는 Google Calendar에서 합니다. 다른 Mac에서도 보려면 그 Mac에 같은 Google 계정을 연결하고 앱에서 캘린더를 선택해야 합니다. 캘린더 접근 권한을 끄거나 선택을 해제하면 앱 화면에서 사라집니다. 장소 텍스트는 상세에서 네이버지도 검색으로 열 수 있지만, Google 일정의 주차·후기 자동 조회는 실행하지 않습니다.
+Google 일정은 읽기 전용입니다. 앱의 일정으로 복사하거나 Supabase에 전송하지 않으며, 수정·삭제는 Mac 캘린더 또는 Google Calendar에서 합니다. 다른 Mac에서도 보려면 그 Mac에서 같은 계정을 연결하고 캘린더를 선택해야 합니다. 캘린더 접근 권한을 끄거나 선택을 해제하면 앱 화면에서 사라집니다. 같은 캘린더를 두 방법으로 모두 선택하면 중복 표시될 수 있습니다. 장소 텍스트는 상세에서 네이버지도 검색으로 열 수 있지만, Google 일정의 주차·후기 자동 조회는 실행하지 않습니다.
 
 ## 주차와 리뷰 자동 조회
 
@@ -86,6 +88,7 @@ Codex 계정의 사용량 한도가 적용됩니다. 처음 조회할 Mac에는 
 - 로컬: `~/Library/Application Support/monthly-plan/`
 - 계정별 로컬 캐시: 위 폴더의 `accounts/<project hash>/<user ID>/`
 - Supabase 인증 토큰: macOS 키체인
+- 직접 연결한 Google Calendar 인증 토큰: 이 Mac의 키체인
 - 프로젝트 URL·공개 API 키: macOS 앱 설정
 
 로컬 백업은 앱을 종료한 뒤 위 폴더 **전체**를 복사하세요. SQLite 파일 하나를 iCloud Drive에서 동시에 공유하는 방식은 사용하지 않습니다. 클라우드 동기화는 백업과 다르므로 Supabase의 별도 백업 정책도 설정하세요.
@@ -100,6 +103,6 @@ swift build --disable-sandbox -c release --product monthly-plan
 .build/release/monthly-plan --export-empty /tmp/monthly-plan.jpg
 ```
 
-Foundation 기반 검사 실행기를 포함하므로 XCTest가 없는 Command Line Tools 환경에서도 검증할 수 있습니다. 실제 Supabase 연결에는 위 설정과 이메일 인증이 필요합니다. [`supabase/tests`](supabase/tests)의 SQL 검사는 별도의 테스트 데이터베이스에서만 실행하세요.
+Foundation 기반 검사 실행기를 포함하므로 XCTest가 없는 Command Line Tools 환경에서도 검증할 수 있습니다. 실제 Supabase 연결에는 위 설정과 선택한 로그인 방법의 인증이 필요합니다. [`supabase/tests`](supabase/tests)의 SQL 검사는 별도의 테스트 데이터베이스에서만 실행하세요.
 
 [개인정보 처리 안내](PRIVACY.md) · [이용 안내](TERMS.md) · [MIT License](LICENSE)

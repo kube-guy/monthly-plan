@@ -95,6 +95,46 @@ final class MonthlyPlanCoreTests {
     XCTAssertEqual(decoded.displayTime, "09:00")
     XCTAssertEqual(decoded.isAllDay, nil)
   }
+  func testGoogleCalendarOAuthAndEventBoundaries() throws {
+    let attempt = try GoogleOAuthAttempt(
+      clientID: "123456-example.apps.googleusercontent.com", port: 49152)
+    let url = attempt.authorizationURL
+    let query = URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!
+    XCTAssertEqual(url.host, "accounts.google.com")
+    XCTAssertEqual(query.first(where: { $0.name == "code_challenge_method" })?.value, "S256")
+    XCTAssertTrue(query.first(where: { $0.name == "scope" })!.value!.contains("calendar.events.readonly"))
+    XCTAssertTrue(!query.first(where: { $0.name == "scope" })!.value!.contains("/auth/calendar "))
+    let valid = URL(string: attempt.redirect.absoluteString + "?code=abc123&state=" + attempt.state)!
+    XCTAssertEqual(try attempt.code(from: valid), "abc123")
+    XCTAssertThrowsError(try attempt.code(from: URL(string: valid.absoluteString.replacingOccurrences(of: attempt.state, with: "wrong"))!))
+    XCTAssertThrowsError(try attempt.code(from: URL(string: valid.absoluteString.replacingOccurrences(of: "127.0.0.1", with: "example.com"))!))
+    let month = PlanDate.parse("2026-10-01")!
+    let timed = try JSONDecoder().decode(GoogleCalendarEvent.self, from: Data(#"{"id":"one","summary":"출장","start":{"dateTime":"2026-10-10T23:00:00+09:00"},"end":{"dateTime":"2026-10-11T02:00:00+09:00"}}"#.utf8))
+    let pieces = timed.plans(calendarID: "personal@example.com", month: month)
+    XCTAssertEqual(pieces.map(\.date), ["2026-10-10", "2026-10-11"])
+    XCTAssertEqual(pieces.map(\.displayTime), ["23:00", "종일"])
+    XCTAssertEqual(pieces.map(\.id), timed.plans(calendarID: "personal@example.com", month: month).map(\.id))
+    let allDay = try JSONDecoder().decode(GoogleCalendarEvent.self, from: Data(#"{"id":"two","summary":"여행","start":{"date":"2026-10-01"},"end":{"date":"2026-10-03"}}"#.utf8))
+    XCTAssertEqual(allDay.plans(calendarID: "personal@example.com", month: month).map(\.date), ["2026-10-01", "2026-10-02"])
+  }
+  func testGoogleAccountOAuthCallbackIsolation() throws {
+    let config = try SupabaseConfiguration(url: "https://test.supabase.co",
+      publishableKey: "sb_publishable_TEST_FIXTURE_ONLY")
+    let login = GoogleAccountLogin()
+    let authorize = login.authorizationURL(project: config)
+    let query = URLComponents(url: authorize, resolvingAgainstBaseURL: false)!.queryItems!
+    XCTAssertEqual(authorize.host, "test.supabase.co")
+    XCTAssertEqual(authorize.path, "/auth/v1/authorize")
+    XCTAssertEqual(query.first(where: { $0.name == "provider" })?.value, "google")
+    XCTAssertEqual(query.first(where: { $0.name == "code_challenge_method" })?.value, "s256")
+    XCTAssertEqual(query.first(where: { $0.name == "redirect_to" })?.value, login.redirect.absoluteString)
+    let valid = URL(string: login.redirect.absoluteString + "&code=TEST_CODE")!
+    XCTAssertEqual(try login.authorizationCode(from: valid), "TEST_CODE")
+    XCTAssertThrowsError(try login.authorizationCode(from: URL(string:
+      valid.absoluteString.replacingOccurrences(of: login.state, with: "other"))!))
+    XCTAssertThrowsError(try login.authorizationCode(from: URL(string:
+      valid.absoluteString.replacingOccurrences(of: "monthly-plan://auth", with: "monthly-plan://evil"))!))
+  }
   func testSQLiteRoundTripAtomicBatchAndDelete() throws {
     let url = try directory().appendingPathComponent("plans.sqlite")
     let repo = try EventRepository(fileURL: url)
@@ -220,6 +260,8 @@ private func XCTAssertNoThrow<T>(
       ("input limits", suite.testBatchLimits),
       ("event validation", suite.testValidationAndOvernight),
       ("calendar display compatibility", suite.testCalendarDisplayAndLegacyEventDecode),
+      ("Google OAuth and calendar boundaries", suite.testGoogleCalendarOAuthAndEventBoundaries),
+      ("Google account OAuth callback isolation", suite.testGoogleAccountOAuthCallbackIsolation),
       ("SQLite atomic persistence", suite.testSQLiteRoundTripAtomicBatchAndDelete),
       ("external place linking", suite.testExternalPlaceMappingAndDeletion),
       ("legacy migration", suite.testLegacyJSONImportedOnceWithoutRemovingSource),
@@ -244,6 +286,6 @@ private func XCTAssertNoThrow<T>(
       print("PASS \(name)")
     }
     try await runTransportChecks()
-    print("\(tests.count + 6) checks passed")
+    print("\(tests.count + 8) checks passed")
   }
 }

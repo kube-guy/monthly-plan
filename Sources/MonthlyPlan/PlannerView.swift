@@ -21,6 +21,7 @@ private enum ActiveSheet: Identifiable {
 struct PlannerView: View {
   @EnvironmentObject var store: PlanStore
   @StateObject private var google = GoogleCalendarStore()
+  @StateObject private var directGoogle = DirectGoogleCalendarStore()
   @State private var month = PlanDate.first(Date())
   @State private var selected: String?
   @State private var sheet: ActiveSheet?
@@ -30,9 +31,9 @@ struct PlannerView: View {
   @State private var message = ""
   private var monthKey: String { PlanDate.month(month) }
   private var events: [PlanEvent] {
-    PlanDate.sorted(store.events.filter { $0.date.hasPrefix(monthKey) } + google.events)
+    PlanDate.sorted(store.events.filter { $0.date.hasPrefix(monthKey) } + google.events + directGoogle.events)
   }
-  private var googleEventIDs: Set<UUID> { Set(google.events.map(\.id)) }
+  private var googleEventIDs: Set<UUID> { Set((google.events + directGoogle.events).map(\.id)) }
   private var visible: [PlanEvent] { events.filter { selected == nil || $0.date == selected } }
   private var mapped: [PlanEvent] { visible.filter(\.hasLocation) }
   var body: some View {
@@ -122,6 +123,7 @@ struct PlannerView: View {
     }.background(Color.paper)
       .task {
         google.setMonth(month)
+        directGoogle.setMonth(month)
         while !Task.isCancelled {
           await store.sync()
           do { try await Task.sleep(for: .seconds(60)) } catch { break }
@@ -132,6 +134,7 @@ struct PlannerView: View {
       ) { _ in
         Task { await store.sync() }
         google.refresh()
+        directGoogle.refresh()
       }
       .onReceive(NotificationCenter.default.publisher(for: .EKEventStoreChanged)) { _ in
         google.refresh()
@@ -146,6 +149,7 @@ struct PlannerView: View {
         selected = nil
         camera = .automatic
         google.setMonth(month)
+        directGoogle.setMonth(month)
       }
       .sheet(item: $sheet) { item in
         switch item {
@@ -160,11 +164,13 @@ struct PlannerView: View {
             if let first = values.first { didSave(first) }
           }
         case .settings: PlacesSettings()
-        case .cloud: CloudSettings().environmentObject(google)
+        case .cloud: CloudSettings().environmentObject(google).environmentObject(directGoogle)
         case .export: ExportSheet(events: events, month: month)
         case .detail(let event):
           EventDetail(
             event: event, readOnly: googleEventIDs.contains(event.id),
+            sourceLabel: directGoogle.events.contains(where: { $0.id == event.id })
+              ? "Google Calendar · 읽기 전용" : "Mac 캘린더 · 읽기 전용",
             onEdit: { sheet = .editor(event) },
             onDelete: {
               pendingDelete = event
@@ -288,6 +294,7 @@ struct PlannerView: View {
 struct EventDetail: View {
   let event: PlanEvent
   var readOnly = false
+  var sourceLabel = "Mac 캘린더 · 읽기 전용"
   let onEdit: () -> Void
   let onDelete: () -> Void
   @Environment(\.dismiss) var dismiss
@@ -296,7 +303,7 @@ struct EventDetail: View {
       VStack(alignment: .leading, spacing: 19) {
         HStack {
           if readOnly {
-            Label("Mac 캘린더 · 읽기 전용", systemImage: "calendar").font(.caption)
+            Label(sourceLabel, systemImage: "calendar").font(.caption)
               .foregroundStyle(Color.subtle)
           }
           Text(event.category.label).font(.caption).padding(7).foregroundStyle(event.category.color)

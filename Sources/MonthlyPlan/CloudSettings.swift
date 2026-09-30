@@ -4,9 +4,11 @@ import SwiftUI
 struct CloudSettings: View {
   @EnvironmentObject var store: PlanStore
   @EnvironmentObject var google: GoogleCalendarStore
+  @EnvironmentObject var directGoogle: DirectGoogleCalendarStore
   @Environment(\.dismiss) private var dismiss
   @State private var projectURL = ""
   @State private var key = ""
+  @State private var googleClientID = ""
   @State private var email = ""
   @State private var code = ""
   @State private var sentTo: String?
@@ -97,6 +99,20 @@ struct CloudSettings: View {
             } catch { failure = error.localizedDescription }
           }.disabled(store.busy)
           Divider()
+          Text("앱 계정 로그인").font(.headline)
+          Button("Google 계정으로 로그인") {
+            do {
+              try store.startGoogleLogin()
+              notice = "브라우저에서 Google 로그인을 마치면 앱으로 돌아옵니다."
+              failure = ""
+            } catch { failure = error.localizedDescription }
+          }.buttonStyle(PrimaryButtonStyle()).disabled(store.busy || store.configuration == nil)
+          Text("Google 로그인은 Supabase에 저장된 일정 계정을 선택합니다. 이전 이메일 계정과 Google 계정의 이메일이 다르면 별도의 빈 일정이 열릴 수 있습니다.")
+            .font(.caption).foregroundStyle(Color.subtle)
+          Link("Google 로그인 설정 방법 ↗", destination: URL(
+            string: "https://github.com/kube-guy/monthly-plan/blob/main/docs/GOOGLE_LOGIN.md")!)
+            .font(.caption)
+          Divider()
           FieldLabel(title: "로그인 이메일") { TextField("이메일 주소", text: $email) }
           Button("로그인 메일 받기") {
             Task {
@@ -168,6 +184,49 @@ struct CloudSettings: View {
             .buttonStyle(PrimaryButtonStyle())
         }
         if let error = google.error { Text(error).font(.caption).foregroundStyle(.red) }
+        Divider()
+        Label("Google 계정으로 직접 연결", systemImage: "person.crop.circle.badge.checkmark")
+          .font(.headline)
+        Text("Mac 캘린더 계정 설정 없이 Google 계정에 로그인해 캘린더를 읽습니다. 앱의 Supabase 로그인 계정은 바뀌지 않습니다. 같은 캘린더를 위쪽에서도 선택하면 일정이 두 번 보일 수 있어요.")
+          .font(.caption).foregroundStyle(Color.subtle)
+        if directGoogle.connected {
+          Text("Google Calendar 연결됨").font(.caption).foregroundStyle(Color.forest)
+          if directGoogle.calendars.isEmpty {
+            Text("캘린더를 불러오는 중이거나 표시할 캘린더가 없습니다.")
+              .font(.caption).foregroundStyle(Color.subtle)
+          }
+          ForEach(directGoogle.calendars) { calendar in
+            Button { directGoogle.toggle(calendar.id) } label: {
+              HStack(spacing: 9) {
+                Image(systemName: directGoogle.selectedIDs.contains(calendar.id) ? "checkmark.square.fill" : "square")
+                Text(calendar.summary)
+                Spacer()
+                if calendar.primary == true { Text("기본").font(.caption).foregroundStyle(Color.subtle) }
+              }
+            }.buttonStyle(.plain)
+          }
+          HStack {
+            Button("Google 일정 새로고침") { directGoogle.refresh() }
+            Spacer()
+            Button("이 Mac에서 Google 연결 해제") { directGoogle.disconnect() }
+          }
+        } else {
+          FieldLabel(title: "Google Cloud 데스크톱 앱 OAuth Client ID") {
+            TextField("...apps.googleusercontent.com", text: $googleClientID)
+          }
+          Link("Google Cloud에서 Client ID 준비하는 방법 ↗", destination: URL(string: "https://developers.google.com/identity/protocols/oauth2/native-app")!)
+            .font(.caption)
+          HStack {
+            Button("Google 계정으로 캘린더 연결") {
+              Task { await directGoogle.connect(clientID: googleClientID) }
+            }.buttonStyle(PrimaryButtonStyle()).disabled(directGoogle.busy || googleClientID.isEmpty)
+            if directGoogle.busy {
+              ProgressView().controlSize(.small)
+              Button("취소") { directGoogle.cancelConnection() }
+            }
+          }
+        }
+        if let error = directGoogle.error { Text(error).font(.caption).foregroundStyle(.red) }
         if !notice.isEmpty { Text(notice).font(.caption).foregroundStyle(Color.forest) }
         if !failure.isEmpty { Text(failure).font(.caption).foregroundStyle(.red) }
         if let error = store.error { Text(error).font(.caption).foregroundStyle(.red) }
@@ -176,6 +235,7 @@ struct CloudSettings: View {
       .onAppear {
         projectURL = store.configuration?.url.absoluteString ?? ""
         key = store.configuration?.publishableKey ?? ""
+        googleClientID = directGoogle.clientID ?? ""
       }
       .confirmationDialog(
         "기존 일정을 현재 계정에 복사할까요?", isPresented: $confirmImport, titleVisibility: .visible

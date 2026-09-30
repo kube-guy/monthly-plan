@@ -125,18 +125,24 @@ public struct SupabaseClient: Sendable {
   }
   public func completeLogin(callback: URL, login: EmailLogin) async throws -> SupabaseSession {
     let code = try login.authorizationCode(from: callback)
+    let result = try await exchangeCode(code, verifier: login.verifier)
+    guard result.user.email?.caseInsensitiveCompare(login.email) == .orderedSame else {
+      throw PlanError.invalid("요청한 이메일과 로그인 계정이 다릅니다.")
+    }
+    return result
+  }
+  public func completeGoogleLogin(callback: URL, login: GoogleAccountLogin) async throws -> SupabaseSession {
+    try await exchangeCode(login.authorizationCode(from: callback), verifier: login.verifier)
+  }
+  private func exchangeCode(_ code: String, verifier: String) async throws -> SupabaseSession {
     let response = try await send(
       request(
         path: "auth/v1/token", method: "POST",
         query: [.init(name: "grant_type", value: "pkce")],
         body: JSONSerialization.data(withJSONObject: [
-          "auth_code": code, "code_verifier": login.verifier,
+          "auth_code": code, "code_verifier": verifier,
         ])))
-    let result = try decodeSession(response)
-    guard result.user.email?.caseInsensitiveCompare(login.email) == .orderedSame else {
-      throw PlanError.invalid("요청한 이메일과 로그인 계정이 다릅니다.")
-    }
-    return result
+    return try decodeSession(response)
   }
   public func verify(email: String, code: String) async throws -> SupabaseSession {
     let parameters = try verificationParameters(email: email, input: code)

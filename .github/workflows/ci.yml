@@ -16,6 +16,8 @@ jobs:
         run: swift build --disable-sandbox -c release --product monthly-plan
       - name: Package macOS app
         run: bash scripts/package-app.sh --skip-build
+      - name: Google sign-in callback smoke test
+        run: .build/release/monthly-plan --check-google-loopback
       - name: Export PNG and JPG
         run: |
           mkdir -p build/previews

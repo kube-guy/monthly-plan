@@ -8,7 +8,32 @@ enum Launcher {
   static func main() async {
     let args = CommandLine.arguments
     if args.contains("--version") {
-      print("monthly-plan 0.1.5")
+      print("monthly-plan 0.1.6")
+      return
+    }
+    if args.contains("--check-google-loopback") {
+      do {
+        let listener = try GoogleOAuthLoopback()
+        let port = try await listener.start()
+        let attempt = try GoogleOAuthAttempt(
+          clientID: "123456-example.apps.googleusercontent.com", port: port)
+        var callback = URLComponents(url: attempt.redirect, resolvingAgainstBaseURL: false)!
+        callback.queryItems = [
+          .init(name: "code", value: "LOOPBACK_CHECK"),
+          .init(name: "state", value: attempt.state),
+        ]
+        let request = Task { try await URLSession.shared.data(from: callback.url!) }
+        let received = try await listener.waitForCallback()
+        guard try attempt.code(from: received) == "LOOPBACK_CHECK" else {
+          throw PlanError.invalid("로컬 로그인 복귀 확인에 실패했습니다.")
+        }
+        _ = try await request.value
+        listener.stop()
+        print("Google loopback callback passed")
+      } catch {
+        fputs("\(error.localizedDescription)\n", stderr)
+        exit(1)
+      }
       return
     }
     if let index = args.firstIndex(of: "--export-empty"), args.count > index + 1 {

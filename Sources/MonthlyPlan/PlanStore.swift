@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import MonthlyPlanCore
 import SwiftUI
@@ -17,6 +18,7 @@ final class PlanStore: ObservableObject {
   @Published private(set) var lastSync: Date?
   private var session: SupabaseSession?
   private var pendingLogin: EmailLogin?
+  private var pendingGoogleLogin: GoogleAccountLogin?
   private var repository: EventRepository?
   private let directory: URL
   var signedIn: Bool { session != nil }
@@ -150,6 +152,7 @@ final class PlanStore: ObservableObject {
     UserDefaults.standard.set(try JSONEncoder().encode(value), forKey: "supabaseConfiguration")
     configuration = value
     pendingLogin = nil
+    pendingGoogleLogin = nil
   }
   func sendCode(email: String) async throws {
     guard !busy, let configuration else { throw PlanError.invalid("프로젝트를 연결한 뒤 다시 시도해 주세요.") }
@@ -158,6 +161,19 @@ final class PlanStore: ObservableObject {
     let login = EmailLogin(email: email)
     try await SupabaseClient(configuration: configuration).sendCode(email: email, login: login)
     pendingLogin = login
+    pendingGoogleLogin = nil
+    error = nil
+  }
+  func startGoogleLogin() throws {
+    guard !busy, !signedIn, let configuration else {
+      throw PlanError.invalid("Supabase 프로젝트를 연결한 뒤 Google 로그인을 시도해 주세요.")
+    }
+    let login = GoogleAccountLogin()
+    guard NSWorkspace.shared.open(login.authorizationURL(project: configuration)) else {
+      throw PlanError.invalid("브라우저에서 Google 로그인 페이지를 열지 못했습니다.")
+    }
+    pendingGoogleLogin = login
+    pendingLogin = nil
     error = nil
   }
   func login(email: String, code: String) async throws {
@@ -183,16 +199,25 @@ final class PlanStore: ObservableObject {
     }
   }
   func handleLoginCallback(_ url: URL) async {
-    guard !busy, let configuration, let pendingLogin else {
+    guard !busy, let configuration else {
       error = "이 Mac의 앱에서 새 로그인 메일을 요청한 뒤 링크를 열어 주세요."
       return
     }
     authBusy = true
     do {
-      let value = try await SupabaseClient(configuration: configuration).completeLogin(
-        callback: url, login: pendingLogin)
+      let value: SupabaseSession
+      if let pendingGoogleLogin {
+        value = try await SupabaseClient(configuration: configuration).completeGoogleLogin(
+          callback: url, login: pendingGoogleLogin)
+      } else if let pendingLogin {
+        value = try await SupabaseClient(configuration: configuration).completeLogin(
+          callback: url, login: pendingLogin)
+      } else {
+        throw PlanError.invalid("이 Mac의 앱에서 로그인을 시작한 뒤 다시 시도해 주세요.")
+      }
       try CloudCredentials.save(value, project: configuration.projectKey)
       self.pendingLogin = nil
+      self.pendingGoogleLogin = nil
       session = value
       repository = nil
       events = []
@@ -217,6 +242,7 @@ final class PlanStore: ObservableObject {
     }
     session = nil
     pendingLogin = nil
+    pendingGoogleLogin = nil
     repository = nil
     events = []
     conflicts = []

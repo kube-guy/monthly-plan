@@ -120,6 +120,17 @@ func runTransportChecks() async throws {
   precondition(pkce[0].url!.absoluteString.contains("redirect_to="))
   precondition(pkce[1].url!.query == "grant_type=pkce")
   print("PASS email callback PKCE challenge and exchange")
+  let googleAccount = GoogleAccountLogin()
+  let googleCallback = URL(string: googleAccount.redirect.absoluteString + "&code=TEST_GOOGLE_CODE")!
+  MockHTTP.state.reset([(200, auth)])
+  _ = try await client.completeGoogleLogin(callback: googleCallback, login: googleAccount)
+  let accountRequests = MockHTTP.state.recorded()
+  precondition(accountRequests.count == 1)
+  precondition(accountRequests[0].url?.query == "grant_type=pkce")
+  let accountExchange = try body(accountRequests[0])
+  precondition(accountExchange["auth_code"] as? String == "TEST_GOOGLE_CODE")
+  precondition(accountExchange["code_verifier"] as? String == googleAccount.verifier)
+  print("PASS Google account callback PKCE exchange")
   for bad in [
     callback.absoluteString.replacingOccurrences(of: attempt.state, with: "different-state"),
     callback.absoluteString.replacingOccurrences(of: "monthly-plan:", with: "https:"),
@@ -139,5 +150,30 @@ func runTransportChecks() async throws {
     preconditionFailure("Expired link must fail")
   } catch SupabaseFailure.authentication(let code) { precondition(code == "otp_expired") }
   print("PASS expired email error is distinct from database permissions")
+
+  let googleSettings = URLSessionConfiguration.ephemeral
+  googleSettings.protocolClasses = [MockHTTP.self]
+  let google = GoogleCalendarAPI(session: URLSession(configuration: googleSettings))
+  let googleAttempt = try GoogleOAuthAttempt(clientID: "123456-example.apps.googleusercontent.com", port: 49152)
+  MockHTTP.state.reset([
+    (200, Data(#"{"access_token":"GOOGLE_ACCESS","refresh_token":"GOOGLE_REFRESH","expires_in":3600}"#.utf8)),
+    (200, Data(#"{"access_token":"GOOGLE_ACCESS_2","expires_in":3600}"#.utf8)),
+    (200, Data(#"{"items":[{"id":"person@example.com","summary":"개인"}]}"#.utf8)),
+    (200, Data(#"{"items":[{"id":"event-1","summary":"약속","start":{"date":"2026-10-03"},"end":{"date":"2026-10-04"}}]}"#.utf8)),
+  ])
+  let googleToken = try await google.exchange(code: "TEST_CODE", attempt: googleAttempt)
+  let refreshedGoogleToken = try await google.refresh(googleToken)
+  precondition(refreshedGoogleToken.refreshToken == "GOOGLE_REFRESH")
+  let googleCalendars = try await google.calendars(token: refreshedGoogleToken.accessToken)
+  let googleEvents = try await google.events(calendarID: googleCalendars[0].id,
+    month: PlanDate.parse("2026-10-01")!, token: refreshedGoogleToken.accessToken)
+  precondition(googleEvents.count == 1)
+  let googleRequests = MockHTTP.state.recorded()
+  precondition(googleRequests[0].url?.host == "oauth2.googleapis.com")
+  precondition(googleRequests[0].value(forHTTPHeaderField: "Content-Type") == "application/x-www-form-urlencoded")
+  precondition(googleRequests[2].url?.host == "www.googleapis.com")
+  precondition(googleRequests[3].url?.path.contains("person@example.com") == true)
+  precondition(googleRequests[3].value(forHTTPHeaderField: "Authorization") == "Bearer GOOGLE_ACCESS_2")
+  print("PASS Google Calendar token refresh and read-only requests")
 
 }

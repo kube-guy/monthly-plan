@@ -14,7 +14,9 @@ Supabase 프로젝트를 설정하고 로그인하면 해당 계정에서 작성
 
 ## Google Calendar
 
-사용자가 Mac 캘린더 읽기 권한을 허용하면 macOS 캘린더에 연결된 계정의 캘린더 목록을 표시합니다. 선택한 캘린더의 일정 제목·시간·장소·메모를 현재 월의 화면에 읽기 전용으로 표시합니다. 선택한 캘린더의 식별자만 Mac의 앱 설정에 저장합니다. Google 일정 본문은 앱의 SQLite·Supabase로 복사하거나 Codex 조회에 전달하지 않습니다. 사용자가 이미지 내보내기를 선택하면 화면에 표시된 Google 일정의 제목·시간·장소가 PNG/JPG에 포함될 수 있습니다. Google 계정의 동기화는 macOS가 처리합니다.
+Mac 캘린더 접근을 허용하면 macOS 캘린더에 연결된 계정의 캘린더 목록을 표시합니다. 직접 연결을 선택하면 Google 로그인 페이지에서 캘린더 목록·일정 읽기 권한을 요청하고 Google Calendar API로 선택한 일정을 가져옵니다. 직접 연결용 접근·갱신 토큰은 이 Mac의 키체인에 저장하며, 연결을 해제하면 삭제합니다. 두 방식 모두 선택한 캘린더의 식별자만 Mac의 앱 설정에 저장하고 일정 제목·시간·장소·메모를 현재 월의 화면에 읽기 전용으로 표시합니다. Google 일정 본문은 앱의 SQLite·Supabase로 복사하거나 Codex 조회에 전달하지 않습니다. 이미지 내보내기를 선택하면 표시된 Google 일정의 제목·시간·장소가 PNG/JPG에 포함될 수 있습니다.
+
+Google 계정으로 **앱 계정**에 로그인할 때는 Google 인증 결과가 사용자가 설정한 Supabase Auth 프로젝트로 전달됩니다. 이 로그인의 계정 정보와 앱 일정 동기화는 위의 Supabase 처리 범위에 따르며, 캘린더 읽기 권한은 별도 직접 연결에서만 요청합니다.
 
 ## 지도와 외부 장소 정보
 
@@ -23,7 +25,7 @@ Supabase 프로젝트를 설정하고 로그인하면 해당 계정에서 작성
 - 주차·후기 자동 요약: 앱이 사용자의 Codex CLI 로그인으로 웹 검색을 실행합니다. 장소명과 주소만 Codex에 전달하며 일정 제목·메모·날짜·시간은 보내지 않습니다. Codex 사용량이 소모될 수 있습니다.
 - 첫 조회의 요약과 출처는 계정별 SQLite에 저장합니다. 로그인한 경우 같은 계정의 다른 Mac에서도 사용하도록 Supabase에 동기화합니다. Codex 조회는 읽기 전용 임시 세션에서 실행합니다. 이전 버전의 Google 장소 ID는 호환성을 위해 보관할 수 있으나 새 조회에는 사용하지 않습니다. 출처 링크는 사용자가 선택할 때 열립니다.
 
-외부 서비스에는 [Apple 개인정보 처리방침](https://www.apple.com/legal/privacy/), [네이버 개인정보 처리방침](https://policy.naver.com/policy/privacy.html), [OpenAI 개인정보 처리방침](https://openai.com/policies/privacy-policy/), [Supabase 개인정보 처리방침](https://supabase.com/privacy)이 적용됩니다.
+외부 서비스에는 [Apple 개인정보 처리방침](https://www.apple.com/legal/privacy/), [Google 개인정보 처리방침](https://policies.google.com/privacy), [네이버 개인정보 처리방침](https://policy.naver.com/policy/privacy.html), [OpenAI 개인정보 처리방침](https://openai.com/policies/privacy-policy/), [Supabase 개인정보 처리방침](https://supabase.com/privacy)이 적용됩니다.
 
 ## 이미지와 백업
 
