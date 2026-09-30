@@ -84,6 +84,7 @@ enum ExportService {
   ) throws -> Bool {
     let panel = NSSavePanel()
     panel.title = "이달의 일정을 이미지로 저장"
+    panel.directoryURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
     panel.allowedContentTypes = format == "png" ? [.png] : [.jpeg]
     panel.nameFieldStringValue = "monthly-plan-\(PlanDate.month(month))-\(mode.rawValue).\(format)"
     panel.canCreateDirectories = true
@@ -104,6 +105,7 @@ struct ExportSheet: View {
       Text("이미지로 내보내기").font(.title2.weight(.semibold))
       Text("선택한 날짜와 관계없이 이달 전체를 저장합니다. 지도는 이미지에 포함되지 않아요.").font(.system(size: 12)).foregroundStyle(
         Color.subtle)
+      Text("기본 저장 위치: 다운로드 폴더").font(.system(size: 11)).foregroundStyle(Color.subtle)
       Picker("내보낼 내용", selection: $mode) { ForEach(ExportMode.allCases) { Text($0.label).tag($0) } }
       Picker("파일 형식", selection: $format) {
         Text("PNG · 선명한 원본").tag("png")
