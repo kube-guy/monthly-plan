@@ -13,6 +13,16 @@ struct CloudSettings: View {
   @State private var failure = ""
   @State private var confirmImport = false
   @State private var confirmLogout = false
+  private var dashboardURL: URL {
+    let fallback = URL(string: "https://supabase.com/dashboard")!
+    guard let host = store.configuration?.url.host?.lowercased(),
+      host.hasSuffix(".supabase.co") else { return fallback }
+    let reference = String(host.dropLast(".supabase.co".count))
+    guard reference.range(of: "^[a-z0-9]{20}$", options: .regularExpression) != nil else {
+      return fallback
+    }
+    return URL(string: "https://supabase.com/dashboard/project/\(reference)")!
+  }
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 19) {
@@ -23,6 +33,10 @@ struct CloudSettings: View {
         }
         Text("Supabase에 로그인하면 일정과 장소 연결이 동기화됩니다. 인터넷이 끊겨도 변경은 이 Mac에 남고, 다시 연결되면 전송됩니다.")
           .font(.system(size: 12)).foregroundStyle(Color.subtle)
+        Link(
+          store.configuration == nil ? "Supabase 대시보드 열기 ↗" : "연결된 Supabase 프로젝트 열기 ↗",
+          destination: dashboardURL
+        ).font(.system(size: 12))
         if store.signedIn {
           Label(store.accountEmail ?? "로그인됨", systemImage: "person.crop.circle").textSelection(
             .enabled)
