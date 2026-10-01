@@ -109,6 +109,29 @@ public final class EventRepository {
       for event in checked { try enqueue(id: event.id.uuidString, value: SyncValue(event: event)) }
     }
   }
+  @discardableResult
+  public func mirrorCalendar(_ events: [PlanEvent]) throws -> Int {
+    let checked = try validateBatch(events)
+    guard checked.allSatisfy({ $0.calendarOrigin?.provider == "mac-calendar" }) else {
+      throw PlanError.invalid("Mac 캘린더 일정만 동기화할 수 있습니다.")
+    }
+    let existing = Dictionary(uniqueKeysWithValues: try load().map { ($0.id, $0) })
+    let updates = checked.compactMap { supplied -> PlanEvent? in
+      var incoming = supplied
+      guard let old = existing[incoming.id] else { return incoming }
+      guard let oldOrigin = old.calendarOrigin,
+        let newOrigin = incoming.calendarOrigin else { return nil }
+      guard newOrigin.updatedAt >= oldOrigin.updatedAt else { return nil }
+      if incoming.place == old.place && !incoming.hasLocation && old.hasLocation {
+        incoming.latitude = old.latitude
+        incoming.longitude = old.longitude
+        incoming.address = old.address
+      }
+      return incoming == old ? nil : incoming
+    }
+    if !updates.isEmpty { try save(updates) }
+    return updates.count
+  }
   public func delete(id: UUID) throws {
     try transaction {
       try execute("DELETE FROM events WHERE id = ?", [id.uuidString])
@@ -209,6 +232,19 @@ public final class EventRepository {
           // Saved summaries are immutable; the first cloud version wins automatically.
           try clearPending(remote.id)
           try install(remote)
+        } else if remote.revision > local.baseRevision,
+          let localOrigin = local.value?.event?.calendarOrigin,
+          let remoteOrigin = remote.value?.event?.calendarOrigin {
+          // Calendar copies are read-only. The newer source revision wins across Macs.
+          if localOrigin.updatedAt > remoteOrigin.updatedAt {
+            try setRevision(remote)
+            try setQueue(SyncMutation(id: local.id, baseRevision: remote.revision,
+              value: local.value))
+            try execute("DELETE FROM sync_conflicts WHERE id = ?", [remote.id])
+          } else {
+            try clearPending(remote.id)
+            try install(remote)
+          }
         } else if remote.revision > local.baseRevision {
           try execute(
             "INSERT INTO sync_conflicts(id,payload) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload",

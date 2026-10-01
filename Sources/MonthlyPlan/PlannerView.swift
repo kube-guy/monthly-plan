@@ -31,9 +31,17 @@ struct PlannerView: View {
   @State private var message = ""
   private var monthKey: String { PlanDate.month(month) }
   private var events: [PlanEvent] {
-    PlanDate.sorted(store.events.filter { $0.date.hasPrefix(monthKey) } + google.events + directGoogle.events)
+    let stored = store.events.filter { $0.date.hasPrefix(monthKey) }
+    let storedIDs = Set(stored.map(\.id))
+    return PlanDate.sorted(stored
+      + google.events.filter { !storedIDs.contains($0.id) }
+      + directGoogle.events.filter { !storedIDs.contains($0.id) })
   }
-  private var googleEventIDs: Set<UUID> { Set((google.events + directGoogle.events).map(\.id)) }
+  private var googleEventIDs: Set<UUID> {
+    Set((google.events + directGoogle.events + store.events.filter {
+      $0.calendarOrigin != nil
+    }).map(\.id))
+  }
   private var visible: [PlanEvent] { events.filter { selected == nil || $0.date == selected } }
   private var mapped: [PlanEvent] { visible.filter(\.hasLocation) }
   var body: some View {
@@ -139,10 +147,23 @@ struct PlannerView: View {
       .onReceive(NotificationCenter.default.publisher(for: .EKEventStoreChanged)) { _ in
         google.refresh()
       }
+      .onChange(of: google.events) { _, values in
+        if store.calendarSyncEnabled && google.authorized && !google.selectedIDs.isEmpty {
+          store.mirrorCalendarEvents(values)
+        }
+      }
+      .onChange(of: store.calendarSyncEnabled) { _, enabled in
+        if enabled && google.authorized && !google.selectedIDs.isEmpty {
+          store.mirrorCalendarEvents(google.events)
+        }
+      }
       .onChange(of: store.accountID) { _, _ in
         selected = nil
         sheet = nil
         camera = .automatic
+        if store.calendarSyncEnabled && google.authorized && !google.selectedIDs.isEmpty {
+          store.mirrorCalendarEvents(google.events)
+        }
       }
       .onReceive(NotificationCenter.default.publisher(for: .newPlan)) { _ in newEvent() }
       .onChange(of: month) { _, _ in

@@ -1,9 +1,9 @@
-import CryptoKit
 import EventKit
+@preconcurrency import MapKit
 import MonthlyPlanCore
 import SwiftUI
 
-/// Reads calendars already connected to macOS. These events are never written to PlanStore.
+/// Reads calendars already connected to macOS. Selected events can be mirrored to PlanStore.
 @MainActor
 final class GoogleCalendarStore: ObservableObject {
   struct CalendarChoice: Identifiable {
@@ -22,6 +22,9 @@ final class GoogleCalendarStore: ObservableObject {
   private let eventStore = EKEventStore()
   private let selectionKey = "monthly-plan.google-calendar-selection"
   private var month = PlanDate.first(Date())
+  private var placeLookup: Task<Void, Never>?
+  private var searchedPlaces = Set<String>()
+  private var resolvedPlaces: [String: (latitude: Double, longitude: Double, address: String)] = [:]
 
   init() {
     selectedIDs = Set(UserDefaults.standard.stringArray(forKey: selectionKey) ?? [])
@@ -52,6 +55,7 @@ final class GoogleCalendarStore: ObservableObject {
   }
 
   func refresh() {
+    placeLookup?.cancel()
     authorized = EKEventStore.authorizationStatus(for: .event) == .fullAccess
     guard authorized else {
       calendars = []
@@ -73,48 +77,63 @@ final class GoogleCalendarStore: ObservableObject {
     let start = PlanDate.first(month)
     guard let end = PlanDate.calendar.date(byAdding: .month, value: 1, to: start) else { return }
     let predicate = eventStore.predicateForEvents(withStart: start, end: end, calendars: selected)
-    events = PlanDate.sorted(
-      eventStore.events(matching: predicate).flatMap { event in
-        overlays(for: event, from: start, until: end)
-      })
+    var seen = Set<UUID>()
+    let sourceEvents = eventStore.events(matching: predicate).sorted {
+      ($0.lastModifiedDate ?? .distantPast) > ($1.lastModifiedDate ?? .distantPast)
+    }
+    var imported = PlanDate.sorted(sourceEvents.flatMap { event in
+      overlays(for: event, from: start, until: end)
+    }.filter { seen.insert($0.id).inserted })
+    for index in imported.indices {
+      if !imported[index].hasLocation,
+        let resolved = resolvedPlaces[imported[index].place] {
+        imported[index].latitude = resolved.latitude
+        imported[index].longitude = resolved.longitude
+        imported[index].address = resolved.address
+      }
+    }
+    events = imported
+    let names = Array(Set(events.filter { !$0.place.isEmpty && !$0.hasLocation }
+      .map(\.place)).subtracting(searchedPlaces)).sorted().prefix(12)
+    let targetMonth = month
+    placeLookup = Task { await resolvePlaces(Array(names), month: targetMonth) }
+  }
+
+  private func resolvePlaces(_ names: [String], month targetMonth: Date) async {
+    for name in names {
+      guard !Task.isCancelled, month == targetMonth else { return }
+      searchedPlaces.insert(name)
+      let request = MKLocalSearch.Request()
+      request.naturalLanguageQuery = name
+      let result = try? await MKLocalSearch(request: request).start()
+      guard !Task.isCancelled, month == targetMonth else { return }
+      guard let result else { continue }
+      guard let item = result.mapItems.first(where: {
+        $0.name?.localizedCaseInsensitiveCompare(name) == .orderedSame
+      }) else { continue }
+      let coordinate = item.placemark.coordinate
+      guard abs(coordinate.latitude) <= 85, abs(coordinate.longitude) <= 180 else { continue }
+      let address = String((item.placemark.title ?? "").prefix(300))
+      resolvedPlaces[name] = (coordinate.latitude, coordinate.longitude, address)
+      var updated = events
+      for index in updated.indices where updated[index].place == name && !updated[index].hasLocation {
+        updated[index].latitude = coordinate.latitude
+        updated[index].longitude = coordinate.longitude
+        updated[index].address = address
+      }
+      events = updated
+    }
   }
 
   private func overlays(for event: EKEvent, from monthStart: Date, until monthEnd: Date) -> [PlanEvent] {
-    // A multi-day occurrence appears on each day it occupies. EventKit already expands recurrences.
     guard let eventStart = event.startDate, let eventEnd = event.endDate else { return [] }
-    let lastInstant = eventEnd > eventStart
-      ? eventEnd.addingTimeInterval(-0.001) : eventStart
-    let firstDay = PlanDate.calendar.startOfDay(for: max(eventStart, monthStart))
-    let lastDay = PlanDate.calendar.startOfDay(for: min(lastInstant, monthEnd.addingTimeInterval(-0.001)))
-    guard firstDay <= lastDay else { return [] }
-    var day = firstDay
-    var result: [PlanEvent] = []
-    while day <= lastDay {
-      let first = PlanDate.calendar.isDate(day, inSameDayAs: eventStart)
-      let allDay = event.isAllDay || !first
-      let date = PlanDate.string(day)
-      let occurrence = event.eventIdentifier ?? event.calendarItemIdentifier
-      let identity = "\(event.calendar.calendarIdentifier)|\(occurrence)|\(eventStart.timeIntervalSince1970)|\(date)"
-      result.append(PlanEvent(
-        id: stableID(identity), title: event.title ?? "제목 없는 일정", date: date,
-        time: allDay ? "00:00" : clock(eventStart),
-        endTime: first && !event.isAllDay && PlanDate.calendar.isDate(eventStart, inSameDayAs: eventEnd)
-          ? clock(eventEnd) : "",
-        place: event.location ?? "", notes: event.notes ?? "", isAllDay: allDay))
-      guard let next = PlanDate.calendar.date(byAdding: .day, value: 1, to: day) else { break }
-      day = next
-    }
-    return result
-  }
-
-  private func clock(_ date: Date) -> String {
-    let parts = PlanDate.calendar.dateComponents([.hour, .minute], from: date)
-    return String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
-  }
-
-  private func stableID(_ text: String) -> UUID {
-    let hex = SHA256.hash(data: Data(text.utf8)).prefix(16).map { String(format: "%02x", $0) }.joined()
-    let value = "\(hex.prefix(8))-\(hex.dropFirst(8).prefix(4))-\(hex.dropFirst(12).prefix(4))-\(hex.dropFirst(16).prefix(4))-\(hex.dropFirst(20).prefix(12))"
-    return UUID(uuidString: value)!
+    let coordinate = event.structuredLocation?.geoLocation?.coordinate
+    return CalendarImport.plans(CalendarImportInput(
+      externalID: event.calendarItemExternalIdentifier ?? event.calendarItemIdentifier,
+      occurrenceDate: event.occurrenceDate, start: eventStart, end: eventEnd,
+      modifiedAt: event.lastModifiedDate, title: event.title ?? "제목 없는 일정",
+      location: event.location ?? "", notes: event.notes ?? "", isAllDay: event.isAllDay,
+      latitude: coordinate?.latitude, longitude: coordinate?.longitude),
+      from: monthStart, until: monthEnd)
   }
 }

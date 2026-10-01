@@ -95,6 +95,27 @@ final class MonthlyPlanCoreTests {
     XCTAssertEqual(decoded.displayTime, "09:00")
     XCTAssertEqual(decoded.isAllDay, nil)
   }
+  func testMacCalendarImportIdentityAndPlace() throws {
+    let start = PlanDate.parse("2026-10-03")!
+    let end = PlanDate.calendar.date(byAdding: .hour, value: 2, to: start)!
+    let month = PlanDate.first(start)
+    let monthEnd = PlanDate.calendar.date(byAdding: .month, value: 1, to: month)!
+    let input = CalendarImportInput(externalID: "shared-google-event-id",
+      start: start, end: end, modifiedAt: start,
+      title: "서울숲에서 산책")
+    let first = CalendarImport.plans(input, from: month, until: monthEnd)
+    let anotherMac = CalendarImport.plans(input, from: month, until: monthEnd)
+    XCTAssertEqual(first, anotherMac)
+    XCTAssertEqual(first.first?.place, "서울숲")
+    XCTAssertEqual(first.first?.calendarOrigin?.provider, "mac-calendar")
+    XCTAssertEqual(CalendarImport.place(title: "서울숲에서 산책", location: "성수동"), "성수동")
+    XCTAssertEqual(CalendarImport.place(title: "전시 보기 · 장소: 국립현대미술관 서울", location: ""), "국립현대미술관 서울")
+    XCTAssertEqual(CalendarImport.place(title: "산책 @서울숲", location: ""), "서울숲")
+    XCTAssertEqual(CalendarImport.place(title: "회의", location: ""), "")
+    var recurring = input
+    recurring.occurrenceDate = PlanDate.parse("2026-10-10")
+    XCTAssertTrue(CalendarImport.plans(recurring, from: month, until: monthEnd)[0].id != first[0].id)
+  }
   func testGoogleCalendarOAuthAndEventBoundaries() throws {
     let attempt = try GoogleOAuthAttempt(
       clientID: "123456-example.apps.googleusercontent.com", port: 49152)
@@ -261,6 +282,7 @@ private func XCTAssertNoThrow<T>(
       ("input limits", suite.testBatchLimits),
       ("event validation", suite.testValidationAndOvernight),
       ("calendar display compatibility", suite.testCalendarDisplayAndLegacyEventDecode),
+      ("Mac calendar identity and place", suite.testMacCalendarImportIdentityAndPlace),
       ("Google OAuth and calendar boundaries", suite.testGoogleCalendarOAuthAndEventBoundaries),
       ("Google account OAuth callback isolation", suite.testGoogleAccountOAuthCallbackIsolation),
       ("SQLite atomic persistence", suite.testSQLiteRoundTripAtomicBatchAndDelete),
@@ -272,6 +294,7 @@ private func XCTAssertNoThrow<T>(
       ("Codex source validation", suite.testCodexSummaryRequiresSafeSources),
       ("offline queue restart", suite.testOfflineQueueSurvivesRestart),
       ("two Mac create edit delete", suite.testTwoDeviceCreateEditDelete),
+      ("Mac calendar sync without duplicate conflicts", suite.testCalendarMirrorAcrossMacsWithoutConflict),
       ("conflict keeps both versions", suite.testConflictPreservesBothAndChooseRemote),
       ("local conflict resolution", suite.testConflictChooseLocalUsesNewRevision),
       ("edit during upload", suite.testEditingDuringUploadDoesNotLoseChanges),

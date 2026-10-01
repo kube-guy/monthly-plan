@@ -206,8 +206,15 @@ struct CloudSettings: View {
         if let error = directGoogle.error { Text(error).font(.caption).foregroundStyle(.red) }
         Divider()
         Label("Mac 캘린더에서 불러오기 · 선택 사항", systemImage: "calendar").font(.headline)
-        Text("Mac의 캘린더에 Google 계정을 연결한 뒤, 표시할 캘린더를 선택하세요. 일정은 읽기 전용으로 달력·이달의 순간들과 이미지 내보내기에 표시됩니다. Supabase로 복사하지 않습니다.")
+        Text("Mac의 캘린더에 계정을 연결한 뒤 표시할 캘린더를 선택하세요. 캘린더의 장소가 비어 있으면 일정 제목에서 추출하고 Apple 지도에서 일치하는 위치를 찾습니다.")
           .font(.caption).foregroundStyle(Color.subtle)
+        if store.signedIn {
+          Toggle("선택한 Mac 캘린더 일정을 Supabase에 동기화", isOn: Binding(
+            get: { store.calendarSyncEnabled },
+            set: { store.setCalendarSyncEnabled($0) }))
+          Text("켜면 선택한 일정의 제목·시간·장소·메모가 현재 Supabase 계정에 저장되어 다른 Mac에도 표시됩니다. 끄면 이후 가져오기를 멈추며 이미 저장된 일정은 유지됩니다.")
+            .font(.caption).foregroundStyle(Color.subtle)
+        }
         Link("Mac에 Google 계정 연결하는 방법 ↗", destination: URL(string: "https://support.apple.com/guide/mac-help/mh35565/mac")!)
           .font(.caption)
         if google.authorized {

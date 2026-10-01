@@ -19,6 +19,16 @@ public enum PlanCategory: String, Codable, CaseIterable, Sendable {
     }
   }
 }
+public struct CalendarOrigin: Codable, Equatable, Sendable {
+  public var provider: String
+  public var uid: String
+  public var updatedAt: TimeInterval
+  public init(provider: String = "mac-calendar", uid: String, updatedAt: TimeInterval) {
+    self.provider = provider
+    self.uid = uid
+    self.updatedAt = updatedAt
+  }
+}
 public struct PlanEvent: Codable, Identifiable, Equatable, Sendable {
   public var id: UUID
   public var title: String
@@ -32,11 +42,13 @@ public struct PlanEvent: Codable, Identifiable, Equatable, Sendable {
   public var latitude: Double?
   public var longitude: Double?
   public var isAllDay: Bool?
+  public var calendarOrigin: CalendarOrigin?
   public init(
     id: UUID = UUID(), title: String = "", date: String = "", time: String = "09:00",
     endTime: String = "", place: String = "", address: String = "",
     category: PlanCategory = .personal, notes: String = "", latitude: Double? = nil,
-    longitude: Double? = nil, isAllDay: Bool? = nil
+    longitude: Double? = nil, isAllDay: Bool? = nil,
+    calendarOrigin: CalendarOrigin? = nil
   ) {
     self.id = id
     self.title = title
@@ -50,6 +62,7 @@ public struct PlanEvent: Codable, Identifiable, Equatable, Sendable {
     self.latitude = latitude
     self.longitude = longitude
     self.isAllDay = isAllDay
+    self.calendarOrigin = calendarOrigin
   }
   public var displayTime: String { isAllDay == true ? "종일" : time }
   public var hasLocation: Bool { latitude != nil && longitude != nil }
@@ -78,6 +91,13 @@ public struct PlanEvent: Codable, Identifiable, Equatable, Sendable {
       guard let lat = latitude, let lng = longitude, lat.isFinite, lng.isFinite, abs(lat) <= 85,
         abs(lng) <= 180
       else { throw PlanError.invalid("지도 위치를 다시 선택해 주세요.") }
+    }
+    if let calendarOrigin {
+      guard calendarOrigin.provider == "mac-calendar", calendarOrigin.updatedAt.isFinite,
+        calendarOrigin.updatedAt >= 0,
+        calendarOrigin.uid.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil else {
+        throw PlanError.invalid("캘린더 원본 정보가 올바르지 않습니다.")
+      }
     }
     return result
   }

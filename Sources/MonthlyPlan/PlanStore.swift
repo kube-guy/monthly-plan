@@ -15,6 +15,7 @@ final class PlanStore: ObservableObject {
   @Published private(set) var authBusy = false
   @Published private(set) var conflicts: [SyncConflict] = []
   @Published private(set) var pendingCount = 0
+  @Published private(set) var calendarSyncEnabled = false
   @Published private(set) var lastSync: Date?
   private var session: SupabaseSession?
   private var pendingLogin: EmailLogin?
@@ -62,6 +63,8 @@ final class PlanStore: ObservableObject {
     repository = repo
     events = loaded
     accountID = nextID
+    calendarSyncEnabled = signedIn && UserDefaults.standard.bool(
+      forKey: "monthly-plan.calendar-sync." + nextID)
     accountEmail = session?.user.email
     conflicts = try repo.conflicts()
     pendingCount = try repo.pendingCount()
@@ -83,6 +86,21 @@ final class PlanStore: ObservableObject {
     try ready().save(values)
     try reload()
     scheduleSync()
+  }
+  func mirrorCalendarEvents(_ values: [PlanEvent]) {
+    guard signedIn, calendarSyncEnabled else { return }
+    do {
+      let changed = try ready().mirrorCalendar(values)
+      if changed > 0 {
+        try reload()
+        scheduleSync()
+      }
+    } catch { self.error = error.localizedDescription }
+  }
+  func setCalendarSyncEnabled(_ enabled: Bool) {
+    guard signedIn else { return }
+    UserDefaults.standard.set(enabled, forKey: "monthly-plan.calendar-sync." + accountID)
+    calendarSyncEnabled = enabled
   }
   func delete(_ event: PlanEvent) throws {
     try ready().delete(id: event.id)

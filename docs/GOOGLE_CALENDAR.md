@@ -1,6 +1,6 @@
 # Google Calendar 직접 연결
 
-이 연결은 Google Calendar 일정을 **읽기 전용**으로 월별 달력에 표시합니다. 앱의 Supabase 로그인 계정과는 별개이며 일정 본문을 Supabase에 저장하지 않습니다. Google Cloud OAuth 설정이 번거롭다면 Mac **시스템 설정 → 인터넷 계정**에 Google 계정을 연결한 뒤 앱의 **Mac 캘린더 읽기 허용** 기능을 사용할 수 있습니다.
+이 직접 연결은 Google Calendar 일정을 **읽기 전용**으로 월별 달력에 표시합니다. 앱의 Supabase 로그인 계정과는 별개이며 일정 본문을 Supabase에 저장하지 않습니다. Mac **시스템 설정 → 인터넷 계정**에 Google 계정을 연결한 뒤 앱의 **Mac 캘린더 읽기 허용** 기능을 사용할 수도 있습니다. 이 Mac 캘린더 방식에서는 Supabase 로그인 후 **선택한 Mac 캘린더 일정을 Supabase에 동기화**를 켜면 선택한 일정의 제목·시간·장소·메모가 계정에 저장되어 다른 Mac에도 표시됩니다.
 
 1. [Google Cloud Console](https://console.cloud.google.com/apis/credentials)에서 이 앱에 사용할 프로젝트를 선택하거나 만듭니다. 프로젝트에서 **Google Calendar API**를 사용 설정합니다.
 2. Google Auth Platform에서 동의 화면의 앱 이름, 지원 이메일과 대상 사용자를 설정합니다. 필요한 권한 범위는 계정 주소 표시를 위한 `openid email`과 캘린더 읽기용 `https://www.googleapis.com/auth/calendar.calendarlist.readonly`, `https://www.googleapis.com/auth/calendar.events.readonly`입니다. Gmail 내용 읽기 권한은 요청하지 않습니다. 테스트 상태라면 접속할 Google 계정을 테스트 사용자에 추가합니다.

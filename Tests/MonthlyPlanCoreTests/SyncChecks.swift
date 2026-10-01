@@ -49,6 +49,44 @@ extension MonthlyPlanCoreTests {
     try b.receive(one)
     expect(try b.load().isEmpty, "Old response must not resurrect delete")
   }
+  func testCalendarMirrorAcrossMacsWithoutConflict() throws {
+    let a = try repo()
+    let b = try repo()
+    let start = PlanDate.parse("2026-10-03")!
+    let end = PlanDate.calendar.date(byAdding: .hour, value: 1, to: start)!
+    let month = PlanDate.first(start)
+    let monthEnd = PlanDate.calendar.date(byAdding: .month, value: 1, to: month)!
+    let event = CalendarImport.plans(CalendarImportInput(externalID: "same-server-id",
+      start: start, end: end, modifiedAt: start, title: "서울숲에서 산책"),
+      from: month, until: monthEnd)[0]
+    expect(try a.mirrorCalendar([event]) == 1, "First Mac imports")
+    expect(try a.mirrorCalendar([event]) == 0, "Unchanged calendar does not enqueue again")
+    expect(try b.mirrorCalendar([event]) == 1, "Second Mac finds same stable event")
+    let first = try a.pending()[0]
+    try b.receive(accepted(first))
+    expect(try b.conflicts().isEmpty, "Identical imports resolve without manual conflict")
+    expect(try b.pendingCount() == 0, "Duplicate upload is removed")
+    expect(try b.load() == [event], "Cloud copy is visible on second Mac")
+    var changed = event
+    changed.title = "서울숲에서 저녁 산책"
+    changed.calendarOrigin!.updatedAt += 60
+    expect(try b.mirrorCalendar([changed]) == 1, "Later source edit updates the copy")
+    let second = try b.pending()[0]
+    try a.receive(accepted(second, revision: 2))
+    expect(try a.load() == [changed], "First Mac sees edited calendar copy")
+    expect(try a.mirrorCalendar([event]) == 0, "Stale Mac snapshot cannot roll back edit")
+    let local = try repo()
+    var newer = changed
+    newer.title = "더 최근의 원본 수정"
+    newer.calendarOrigin!.updatedAt += 60
+    try local.mirrorCalendar([newer])
+    let olderRemote = SyncRecord(id: event.id.uuidString, revision: 1,
+      mutationID: UUID(), value: SyncValue(event: event))
+    try local.receive(olderRemote)
+    expect(try local.conflicts().isEmpty, "Source revision resolves calendar conflict")
+    expect(try local.pending()[0].baseRevision == 1, "Newer source edit rebases on cloud")
+    expect(try local.load() == [newer], "Newer source edit remains locally")
+  }
   func testConflictPreservesBothAndChooseRemote() throws {
     let a = try repo()
     let b = try repo()
