@@ -32,7 +32,7 @@ public struct GoogleOAuthAttempt: Sendable {
       .init(name: "client_id", value: clientID),
       .init(name: "redirect_uri", value: redirect.absoluteString),
       .init(name: "response_type", value: "code"),
-      .init(name: "scope", value: "https://www.googleapis.com/auth/calendar.calendarlist.readonly https://www.googleapis.com/auth/calendar.events.readonly"),
+      .init(name: "scope", value: "openid email https://www.googleapis.com/auth/calendar.calendarlist.readonly https://www.googleapis.com/auth/calendar.events.readonly"),
       .init(name: "access_type", value: "offline"),
       .init(name: "prompt", value: "consent"),
       .init(name: "state", value: state),
@@ -68,6 +68,12 @@ public struct GoogleCalendarItem: Decodable, Sendable, Identifiable {
   public let summary: String
   public let backgroundColor: String?
   public let primary: Bool?
+}
+
+public struct GoogleAccountIdentity: Decodable, Sendable {
+  public let sub: String
+  public let email: String
+  public let email_verified: Bool
 }
 
 public struct GoogleCalendarEvent: Decodable, Sendable {
@@ -174,6 +180,16 @@ public struct GoogleCalendarAPI: Sendable {
       next = page.nextPageToken
     } while next != nil && items.count < 1000
     return items
+  }
+
+  public func identity(token: String) async throws -> GoogleAccountIdentity {
+    let data = try await get(URL(string: "https://openidconnect.googleapis.com/v1/userinfo")!, token: token)
+    let account = try JSONDecoder().decode(GoogleAccountIdentity.self, from: data)
+    guard account.email_verified, !account.sub.isEmpty, account.sub.count < 256,
+      account.email.contains("@"), account.email.count < 255 else {
+      throw PlanError.invalid("Google 계정의 확인된 이메일을 읽지 못했습니다.")
+    }
+    return account
   }
 
   public func events(calendarID: String, month: Date, token: String) async throws -> [GoogleCalendarEvent] {

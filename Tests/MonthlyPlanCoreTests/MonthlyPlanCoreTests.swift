@@ -103,6 +103,7 @@ final class MonthlyPlanCoreTests {
     XCTAssertEqual(url.host, "accounts.google.com")
     XCTAssertEqual(query.first(where: { $0.name == "code_challenge_method" })?.value, "S256")
     XCTAssertTrue(query.first(where: { $0.name == "scope" })!.value!.contains("calendar.events.readonly"))
+    XCTAssertTrue(query.first(where: { $0.name == "scope" })!.value!.contains("openid email"))
     XCTAssertTrue(!query.first(where: { $0.name == "scope" })!.value!.contains("/auth/calendar "))
     let valid = URL(string: attempt.redirect.absoluteString + "?code=abc123&state=" + attempt.state)!
     XCTAssertEqual(try attempt.code(from: valid), "abc123")

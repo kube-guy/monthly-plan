@@ -158,12 +158,15 @@ func runTransportChecks() async throws {
   MockHTTP.state.reset([
     (200, Data(#"{"access_token":"GOOGLE_ACCESS","refresh_token":"GOOGLE_REFRESH","expires_in":3600}"#.utf8)),
     (200, Data(#"{"access_token":"GOOGLE_ACCESS_2","expires_in":3600}"#.utf8)),
+    (200, Data(#"{"sub":"123456789","email":"person@example.com","email_verified":true}"#.utf8)),
     (200, Data(#"{"items":[{"id":"person@example.com","summary":"개인"}]}"#.utf8)),
     (200, Data(#"{"items":[{"id":"event-1","summary":"약속","start":{"date":"2026-10-03"},"end":{"date":"2026-10-04"}}]}"#.utf8)),
   ])
   let googleToken = try await google.exchange(code: "TEST_CODE", attempt: googleAttempt)
   let refreshedGoogleToken = try await google.refresh(googleToken)
   precondition(refreshedGoogleToken.refreshToken == "GOOGLE_REFRESH")
+  let googleIdentity = try await google.identity(token: refreshedGoogleToken.accessToken)
+  precondition(googleIdentity.sub == "123456789" && googleIdentity.email == "person@example.com")
   let googleCalendars = try await google.calendars(token: refreshedGoogleToken.accessToken)
   let googleEvents = try await google.events(calendarID: googleCalendars[0].id,
     month: PlanDate.parse("2026-10-01")!, token: refreshedGoogleToken.accessToken)
@@ -171,9 +174,16 @@ func runTransportChecks() async throws {
   let googleRequests = MockHTTP.state.recorded()
   precondition(googleRequests[0].url?.host == "oauth2.googleapis.com")
   precondition(googleRequests[0].value(forHTTPHeaderField: "Content-Type") == "application/x-www-form-urlencoded")
-  precondition(googleRequests[2].url?.host == "www.googleapis.com")
-  precondition(googleRequests[3].url?.path.contains("person@example.com") == true)
-  precondition(googleRequests[3].value(forHTTPHeaderField: "Authorization") == "Bearer GOOGLE_ACCESS_2")
-  print("PASS Google Calendar token refresh and read-only requests")
+  precondition(googleRequests[2].url?.host == "openidconnect.googleapis.com")
+  precondition(googleRequests[2].value(forHTTPHeaderField: "Authorization") == "Bearer GOOGLE_ACCESS_2")
+  precondition(googleRequests[3].url?.host == "www.googleapis.com")
+  precondition(googleRequests[4].url?.path.contains("person@example.com") == true)
+  precondition(googleRequests[4].value(forHTTPHeaderField: "Authorization") == "Bearer GOOGLE_ACCESS_2")
+  MockHTTP.state.reset([(200, Data(#"{"sub":"123456789","email":"person@example.com","email_verified":false}"#.utf8))])
+  do {
+    _ = try await google.identity(token: "TEST_TOKEN")
+    preconditionFailure("Unverified account must fail")
+  } catch {}
+  print("PASS Google identity, token refresh and read-only requests")
 
 }

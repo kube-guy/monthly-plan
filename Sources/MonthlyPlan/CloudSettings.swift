@@ -152,7 +152,60 @@ struct CloudSettings: View {
           .font(.caption)
         }
         Divider()
-        Label("Google Calendar", systemImage: "calendar").font(.headline)
+        Label("Gmail 계정 추가 · Google Calendar", systemImage: "person.crop.circle.badge.checkmark")
+          .font(.headline)
+        Text("Mac의 인터넷 계정 설정과 관계없이 Gmail로 직접 로그인합니다. 다른 Mac에서도 같은 Gmail 계정으로 한 번 로그인하면 캘린더를 볼 수 있습니다. 앱의 Supabase 로그인 계정은 바뀌지 않습니다.")
+          .font(.caption).foregroundStyle(Color.subtle)
+        ForEach(directGoogle.accounts) { account in
+          VStack(alignment: .leading, spacing: 8) {
+            HStack {
+              Label(account.email, systemImage: "envelope").font(.subheadline.weight(.semibold))
+              Spacer()
+              Button("이 Mac에서 연결 해제") { directGoogle.disconnect(accountID: account.id) }
+                .font(.caption)
+            }
+            let calendars = directGoogle.calendarsByAccount[account.id] ?? []
+            if calendars.isEmpty {
+              Text(directGoogle.loading ? "캘린더를 불러오는 중입니다." : "표시할 캘린더가 없습니다.")
+                .font(.caption).foregroundStyle(Color.subtle)
+            }
+            ForEach(calendars) { calendar in
+              Button { directGoogle.toggle(accountID: account.id, calendarID: calendar.id) } label: {
+                HStack(spacing: 9) {
+                  Image(systemName: directGoogle.isSelected(accountID: account.id,
+                    calendarID: calendar.id) ? "checkmark.square.fill" : "square")
+                  Text(calendar.summary)
+                  Spacer()
+                  if calendar.primary == true { Text("기본").font(.caption).foregroundStyle(Color.subtle) }
+                }
+              }.buttonStyle(.plain)
+            }
+          }
+          .padding(12).background(.white, in: RoundedRectangle(cornerRadius: 10))
+        }
+        if directGoogle.connected {
+          Button("Google 일정 새로고침") { directGoogle.refresh() }
+        }
+        FieldLabel(title: "Google Cloud 데스크톱 앱 OAuth Client ID") {
+          TextField("...apps.googleusercontent.com", text: $googleClientID)
+        }
+        Text("Client ID는 공개 식별자이며 이 Mac에 저장됩니다. Calendar API용 Google OAuth 설정이 한 번은 필요합니다.")
+          .font(.caption).foregroundStyle(Color.subtle)
+        Link("Google Calendar 직접 연결 설정 안내 ↗", destination: URL(
+          string: "https://github.com/kube-guy/monthly-plan/blob/main/docs/GOOGLE_CALENDAR.md")!)
+          .font(.caption)
+        HStack {
+          Button("Gmail 계정 추가") {
+            Task { await directGoogle.connect(clientID: googleClientID) }
+          }.buttonStyle(PrimaryButtonStyle()).disabled(directGoogle.busy || googleClientID.isEmpty)
+          if directGoogle.busy {
+            ProgressView().controlSize(.small)
+            Button("취소") { directGoogle.cancelConnection() }
+          }
+        }
+        if let error = directGoogle.error { Text(error).font(.caption).foregroundStyle(.red) }
+        Divider()
+        Label("Mac 캘린더에서 불러오기 · 선택 사항", systemImage: "calendar").font(.headline)
         Text("Mac의 캘린더에 Google 계정을 연결한 뒤, 표시할 캘린더를 선택하세요. 일정은 읽기 전용으로 달력·이달의 순간들과 이미지 내보내기에 표시됩니다. Supabase로 복사하지 않습니다.")
           .font(.caption).foregroundStyle(Color.subtle)
         Link("Mac에 Google 계정 연결하는 방법 ↗", destination: URL(string: "https://support.apple.com/guide/mac-help/mh35565/mac")!)
@@ -184,49 +237,6 @@ struct CloudSettings: View {
             .buttonStyle(PrimaryButtonStyle())
         }
         if let error = google.error { Text(error).font(.caption).foregroundStyle(.red) }
-        Divider()
-        Label("Google 계정으로 직접 연결", systemImage: "person.crop.circle.badge.checkmark")
-          .font(.headline)
-        Text("Mac 캘린더 계정 설정 없이 Google 계정에 로그인해 캘린더를 읽습니다. 앱의 Supabase 로그인 계정은 바뀌지 않습니다. 같은 캘린더를 위쪽에서도 선택하면 일정이 두 번 보일 수 있어요.")
-          .font(.caption).foregroundStyle(Color.subtle)
-        if directGoogle.connected {
-          Text("Google Calendar 연결됨").font(.caption).foregroundStyle(Color.forest)
-          if directGoogle.calendars.isEmpty {
-            Text("캘린더를 불러오는 중이거나 표시할 캘린더가 없습니다.")
-              .font(.caption).foregroundStyle(Color.subtle)
-          }
-          ForEach(directGoogle.calendars) { calendar in
-            Button { directGoogle.toggle(calendar.id) } label: {
-              HStack(spacing: 9) {
-                Image(systemName: directGoogle.selectedIDs.contains(calendar.id) ? "checkmark.square.fill" : "square")
-                Text(calendar.summary)
-                Spacer()
-                if calendar.primary == true { Text("기본").font(.caption).foregroundStyle(Color.subtle) }
-              }
-            }.buttonStyle(.plain)
-          }
-          HStack {
-            Button("Google 일정 새로고침") { directGoogle.refresh() }
-            Spacer()
-            Button("이 Mac에서 Google 연결 해제") { directGoogle.disconnect() }
-          }
-        } else {
-          FieldLabel(title: "Google Cloud 데스크톱 앱 OAuth Client ID") {
-            TextField("...apps.googleusercontent.com", text: $googleClientID)
-          }
-          Link("Google Cloud에서 Client ID 준비하는 방법 ↗", destination: URL(string: "https://developers.google.com/identity/protocols/oauth2/native-app")!)
-            .font(.caption)
-          HStack {
-            Button("Google 계정으로 캘린더 연결") {
-              Task { await directGoogle.connect(clientID: googleClientID) }
-            }.buttonStyle(PrimaryButtonStyle()).disabled(directGoogle.busy || googleClientID.isEmpty)
-            if directGoogle.busy {
-              ProgressView().controlSize(.small)
-              Button("취소") { directGoogle.cancelConnection() }
-            }
-          }
-        }
-        if let error = directGoogle.error { Text(error).font(.caption).foregroundStyle(.red) }
         if !notice.isEmpty { Text(notice).font(.caption).foregroundStyle(Color.forest) }
         if !failure.isEmpty { Text(failure).font(.caption).foregroundStyle(.red) }
         if let error = store.error { Text(error).font(.caption).foregroundStyle(.red) }
