@@ -116,6 +116,24 @@ final class MonthlyPlanCoreTests {
     recurring.occurrenceDate = PlanDate.parse("2026-10-10")
     XCTAssertTrue(CalendarImport.plans(recurring, from: month, until: monthEnd)[0].id != first[0].id)
   }
+  func testSelectiveMacCalendarSync() {
+    let chosenUID = String(repeating: "a", count: 64)
+    let otherUID = String(repeating: "b", count: 64)
+    let chosen = PlanEvent(title: "첫날", date: "2026-10-03",
+      calendarOrigin: CalendarOrigin(uid: chosenUID, updatedAt: 1))
+    let secondDay = PlanEvent(title: "둘째 날", date: "2026-10-04",
+      calendarOrigin: CalendarOrigin(uid: chosenUID, updatedAt: 1))
+    let other = PlanEvent(title: "다른 일정", date: "2026-10-05",
+      calendarOrigin: CalendarOrigin(uid: otherUID, updatedAt: 1))
+    let personal = PlanEvent(title: "직접 입력", date: "2026-10-06")
+    let values = [chosen, secondDay, other, personal]
+    XCTAssertEqual(CalendarSyncSelection.events(values, mode: .selected,
+      selectedUIDs: [chosenUID]), [chosen, secondDay])
+    XCTAssertEqual(CalendarSyncSelection.events(values, mode: .selected,
+      selectedUIDs: []), [])
+    XCTAssertEqual(CalendarSyncSelection.events(values, mode: .all,
+      selectedUIDs: []), [chosen, secondDay, other])
+  }
   func testGoogleCalendarOAuthAndEventBoundaries() throws {
     let attempt = try GoogleOAuthAttempt(
       clientID: "123456-example.apps.googleusercontent.com", port: 49152)
@@ -283,6 +301,7 @@ private func XCTAssertNoThrow<T>(
       ("event validation", suite.testValidationAndOvernight),
       ("calendar display compatibility", suite.testCalendarDisplayAndLegacyEventDecode),
       ("Mac calendar identity and place", suite.testMacCalendarImportIdentityAndPlace),
+      ("selective Mac calendar sync", suite.testSelectiveMacCalendarSync),
       ("Google OAuth and calendar boundaries", suite.testGoogleCalendarOAuthAndEventBoundaries),
       ("Google account OAuth callback isolation", suite.testGoogleAccountOAuthCallbackIsolation),
       ("SQLite atomic persistence", suite.testSQLiteRoundTripAtomicBatchAndDelete),

@@ -16,6 +16,20 @@ struct CloudSettings: View {
   @State private var failure = ""
   @State private var confirmImport = false
   @State private var confirmLogout = false
+  private var selectableMacEvents: [PlanEvent] {
+    var seen = Set<String>()
+    return google.events.filter { event in
+      guard let uid = event.calendarOrigin?.uid else { return false }
+      return seen.insert(uid).inserted
+    }
+  }
+  private var displayedMonth: String {
+    let parts = PlanDate.calendar.dateComponents([.year, .month], from: google.month)
+    return "\(parts.year ?? 0)년 \(parts.month ?? 0)월"
+  }
+  private var syncedMacEventUIDs: Set<String> {
+    Set(store.events.compactMap { $0.calendarOrigin?.uid })
+  }
   private var dashboardURL: URL {
     let fallback = URL(string: "https://supabase.com/dashboard")!
     guard let host = store.configuration?.url.host?.lowercased(),
@@ -212,7 +226,37 @@ struct CloudSettings: View {
           Toggle("선택한 Mac 캘린더 일정을 Supabase에 동기화", isOn: Binding(
             get: { store.calendarSyncEnabled },
             set: { store.setCalendarSyncEnabled($0) }))
-          Text("켜면 선택한 일정의 제목·시간·장소·메모가 현재 Supabase 계정에 저장되어 다른 Mac에도 표시됩니다. 끄면 이후 가져오기를 멈추며 이미 저장된 일정은 유지됩니다.")
+          Picker("동기화할 일정", selection: Binding(
+            get: { store.calendarSyncMode },
+            set: { store.setCalendarSyncMode($0) })) {
+            Text("선택한 캘린더의 모든 일정").tag(CalendarSyncMode.all)
+            Text("개별로 선택한 일정만").tag(CalendarSyncMode.selected)
+          }.pickerStyle(.segmented)
+          if store.calendarSyncMode == .selected {
+            Text("현재 보고 있는 \(displayedMonth)의 Mac 캘린더 일정에서 골라 주세요. 다른 달은 달력에서 월을 바꾼 뒤 다시 이 화면을 여세요.")
+              .font(.caption).foregroundStyle(Color.subtle)
+            if selectableMacEvents.isEmpty {
+              Text("이 달에 선택할 Mac 캘린더 일정이 없습니다.")
+                .font(.caption).foregroundStyle(Color.subtle)
+            }
+            ForEach(selectableMacEvents) { event in
+              if let uid = event.calendarOrigin?.uid {
+                Toggle(isOn: Binding(
+                  get: { store.selectedCalendarUIDs.contains(uid) },
+                  set: { store.setCalendarEventSelected(uid, selected: $0) })) {
+                  VStack(alignment: .leading, spacing: 3) {
+                    Text(event.title).font(.subheadline)
+                    Text("\(event.date) · \(event.displayTime)\(event.place.isEmpty ? "" : " · " + event.place)")
+                      .font(.caption).foregroundStyle(Color.subtle)
+                    if syncedMacEventUIDs.contains(uid) {
+                      Text("이미 Supabase에 저장됨").font(.caption2).foregroundStyle(Color.subtle)
+                    }
+                  }
+                }.toggleStyle(.checkbox)
+              }
+            }
+          }
+          Text("동기화를 켜면 선택한 일정의 제목·시간·장소·메모가 현재 Supabase 계정에 저장됩니다. 선택을 해제하거나 동기화를 꺼도 이미 저장된 복사본은 유지됩니다.")
             .font(.caption).foregroundStyle(Color.subtle)
         }
         Link("Mac에 Google 계정 연결하는 방법 ↗", destination: URL(string: "https://support.apple.com/guide/mac-help/mh35565/mac")!)

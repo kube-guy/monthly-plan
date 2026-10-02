@@ -21,7 +21,7 @@ final class GoogleCalendarStore: ObservableObject {
 
   private let eventStore = EKEventStore()
   private let selectionKey = "monthly-plan.google-calendar-selection"
-  private var month = PlanDate.first(Date())
+  private(set) var month = PlanDate.first(Date())
   private var placeLookup: Task<Void, Never>?
   private var searchedPlaces = Set<String>()
   private var resolvedPlaces: [String: (latitude: Double, longitude: Double, address: String)] = [:]

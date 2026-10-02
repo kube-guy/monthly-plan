@@ -157,6 +157,16 @@ struct PlannerView: View {
           store.mirrorCalendarEvents(google.events)
         }
       }
+      .onChange(of: store.calendarSyncMode) { _, _ in
+        if store.calendarSyncEnabled && google.authorized && !google.selectedIDs.isEmpty {
+          store.mirrorCalendarEvents(google.events)
+        }
+      }
+      .onChange(of: store.selectedCalendarUIDs) { _, _ in
+        if store.calendarSyncEnabled && google.authorized && !google.selectedIDs.isEmpty {
+          store.mirrorCalendarEvents(google.events)
+        }
+      }
       .onChange(of: store.accountID) { _, _ in
         selected = nil
         sheet = nil

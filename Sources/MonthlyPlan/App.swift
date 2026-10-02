@@ -8,7 +8,7 @@ enum Launcher {
   static func main() async {
     let args = CommandLine.arguments
     if args.contains("--version") {
-      print("monthly-plan 0.1.8")
+      print("monthly-plan 0.1.9")
       return
     }
     if args.contains("--check-google-loopback") {

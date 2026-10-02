@@ -16,6 +16,8 @@ final class PlanStore: ObservableObject {
   @Published private(set) var conflicts: [SyncConflict] = []
   @Published private(set) var pendingCount = 0
   @Published private(set) var calendarSyncEnabled = false
+  @Published private(set) var calendarSyncMode: CalendarSyncMode = .all
+  @Published private(set) var selectedCalendarUIDs: Set<String> = []
   @Published private(set) var lastSync: Date?
   private var session: SupabaseSession?
   private var pendingLogin: EmailLogin?
@@ -65,6 +67,10 @@ final class PlanStore: ObservableObject {
     accountID = nextID
     calendarSyncEnabled = signedIn && UserDefaults.standard.bool(
       forKey: "monthly-plan.calendar-sync." + nextID)
+    calendarSyncMode = CalendarSyncMode(rawValue: UserDefaults.standard.string(
+      forKey: "monthly-plan.calendar-sync-mode." + nextID) ?? "all") ?? .all
+    selectedCalendarUIDs = Set(UserDefaults.standard.stringArray(
+      forKey: "monthly-plan.calendar-sync-selected." + nextID) ?? [])
     accountEmail = session?.user.email
     conflicts = try repo.conflicts()
     pendingCount = try repo.pendingCount()
@@ -90,7 +96,9 @@ final class PlanStore: ObservableObject {
   func mirrorCalendarEvents(_ values: [PlanEvent]) {
     guard signedIn, calendarSyncEnabled else { return }
     do {
-      let changed = try ready().mirrorCalendar(values)
+      let chosen = CalendarSyncSelection.events(values, mode: calendarSyncMode,
+        selectedUIDs: selectedCalendarUIDs)
+      let changed = try ready().mirrorCalendar(chosen)
       if changed > 0 {
         try reload()
         scheduleSync()
@@ -101,6 +109,23 @@ final class PlanStore: ObservableObject {
     guard signedIn else { return }
     UserDefaults.standard.set(enabled, forKey: "monthly-plan.calendar-sync." + accountID)
     calendarSyncEnabled = enabled
+  }
+  func setCalendarSyncMode(_ mode: CalendarSyncMode) {
+    guard signedIn else { return }
+    UserDefaults.standard.set(mode.rawValue,
+      forKey: "monthly-plan.calendar-sync-mode." + accountID)
+    calendarSyncMode = mode
+  }
+  func setCalendarEventSelected(_ uid: String, selected: Bool) {
+    guard signedIn, uid.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil else {
+      return
+    }
+    var next = selectedCalendarUIDs
+    if selected { next.insert(uid) }
+    else { next.remove(uid) }
+    selectedCalendarUIDs = next
+    UserDefaults.standard.set(next.sorted(),
+      forKey: "monthly-plan.calendar-sync-selected." + accountID)
   }
   func delete(_ event: PlanEvent) throws {
     try ready().delete(id: event.id)
